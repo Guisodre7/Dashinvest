@@ -23,6 +23,8 @@ Stack: Next.js 16 (App Router, server actions) · Supabase (Postgres + Auth com 
 | Página individual do ativo (gráfico com candles, volume, SMA20/50/200), módulos JEPQ/LQD/VNQ | `/ativo/[ticker]` |
 | Alertas, painel macro com mecanismos de impacto por ativo, relatório mensal, snapshots diários | `/`, `/relatorio`, `/api/cron/daily` |
 
+| **Simulador patrimonial**: cenários pessimista/moderado/otimista, projeção mensal, Brasil × exterior, classes (Growth, JEPQ, LQD, VNQ, VOO legado), dividendos, câmbio, comparadores, sensibilidade, stress test | `/projecao`, `src/lib/projection/*` |
+
 A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O motor atual é determinístico e cita as fontes em cada recomendação.
 
 ## Princípios implementados no código
@@ -33,10 +35,21 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - **O sistema nunca vende.** Um ativo acima do peso é corrigido só pelos novos aportes. VOO não recebe aportes e nunca tem venda sugerida.
 - **Consenso de analistas não é recomendação.** Mudanças no consenso pesam mais do que o nível.
 
+## Simulador patrimonial (`/projecao`)
+
+- **Motor** (`src/lib/projection/engine.ts`, funções puras testadas): simulação mês a mês com juros compostos, taxa mensal `(1 + anual)^(1/12) − 1`; aporte no início ou no fim do mês; divisão Brasil/exterior e entre as classes pelos pesos da Estratégia; câmbio `USD/BRL₀ × (1 + variação)^(t/12)`.
+- **Retorno total × proventos**: a premissa de retorno é TOTAL. O yield é a parte paga como provento. Reinvestido, o provento volta ao ativo; não reinvestido, vira caixa em R$ (sem render). O mesmo dinheiro nunca é contado duas vezes.
+- **Efeito cambial**: retorno dos ativos (US$) e efeito cambial são separados, tanto em % ponderado no tempo quanto em R$ (ganho dos ativos + ganho cambial = crescimento).
+- **Comparadores**: comparador de aportes, Brasil × exterior (sem declarar estratégia "melhor"), sensibilidade (uma premissa por vez), "R$ 1.000 a mais" em 3, 5, 10 e 15 anos, e stress test (queda configurável, recuperação opcional, efeito de continuar aportando × pausar).
+- **Monte Carlo**: estrutura preparada, sem exibição na interface nesta etapa. Ver `simulateMonteCarlo()` e `calculatePercentiles()`.
+- **Server-side**: a página e as server actions recalculam tudo no servidor e validam o formulário com zod. Regras: aporte ≥ 0; horizonte de 1 a 600 meses; Brasil + exterior = 100%; pesos das classes = 100%; taxas entre −50% e 50% a.a.; câmbio > 0.
+- **Banco** (`supabase/migrations/0002_projection.sql`): `projection_assumptions`, `projection_scenarios`, `projection_runs`, `projection_monthly_values` (NUMERIC + RLS).
+- Os defaults são premissas editáveis, não expectativas de mercado. "Restaurar premissas padrão" apaga as premissas salvas.
+
 ## Configuração
 
 1. **Supabase**
-   - Crie o projeto e rode `supabase/migrations/0001_init.sql` no SQL Editor (ou use `supabase db push`).
+   - Crie o projeto e rode `supabase/migrations/0001_init.sql` e `0002_projection.sql`, nessa ordem, no SQL Editor (ou use `supabase db push`).
    - Em *Authentication → Providers*, **desative novos cadastros (signups)**. Crie seu usuário com senha forte em *Authentication → Users*.
    - Depois rode `select public.bootstrap_owner('seu-email@exemplo.com');`. Isso autoriza o usuário e cria a estratégia inicial.
    - Em *Authentication → MFA*, habilite TOTP.
@@ -70,6 +83,7 @@ LOCAL_DEV_MODE=true MARKET_DATA_PROVIDER=demo npm run dev
 src/lib/market/        fornecedores, freshness, status do mercado
 src/lib/analysis/      indicadores, estimativas, valuation, notícias, detectores, score, alocação, macro, alertas
 src/lib/portfolio/     cálculo da carteira (USD/BRL, FX), estratégia padrão
+src/lib/projection/    simulador patrimonial (motor, validação, server)
 src/lib/db/            repositório (Supabase com RLS / arquivo local)
 src/app/(app)/         painel, ativo, carteira, estratégia, relatório
 supabase/migrations/   schema completo + RLS + seed

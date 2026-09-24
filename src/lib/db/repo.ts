@@ -9,6 +9,8 @@ import { isLocalDevMode } from "../devmode";
 import type { EarningsEstimates, AnalystData } from "../market/types";
 import type { DividendRow, PositionRow } from "../portfolio/calc";
 import { ASSET_META, DEFAULT_STRATEGY } from "../portfolio/defaults";
+import { SCENARIO_KEYS, type ScenarioKey, type ScenarioResult } from "../projection/types";
+import type { ProjectionForm, ScenarioForm } from "../projection/settings";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "../supabase/server";
 
 export interface AssetRow { ticker: string; name: string; asset_type: "stock" | "etf" }
@@ -50,6 +52,30 @@ export interface AlertRow {
 
 export interface StoredRecommendation extends AllocationResult { id?: string }
 
+export interface ProjectionRunInput {
+  label: string | null;
+  form: ProjectionForm;
+  results: Record<ScenarioKey, ScenarioResult>;
+}
+
+export interface ProjectionRunSummary {
+  id: string;
+  label: string | null;
+  created_at: string;
+  horizon_months: number;
+  monthly_contribution_brl: number;
+  final: Record<ScenarioKey, number>;
+  contributed_brl: number;
+}
+
+/** Colunas numéricas de projection_scenarios ↔ campos do formulário. */
+const SCENARIO_COLUMNS: [keyof ScenarioForm, string][] = [
+  ["brazilRet", "brazil_ret"], ["brazilYield", "brazil_yield"], ["exteriorRet", "exterior_ret"], ["exteriorYield", "exterior_yield"],
+  ["growthRet", "growth_ret"], ["growthYield", "growth_yield"], ["jepqRet", "jepq_ret"], ["jepqYield", "jepq_yield"],
+  ["lqdRet", "lqd_ret"], ["lqdYield", "lqd_yield"], ["vnqRet", "vnq_ret"], ["vnqYield", "vnq_yield"],
+  ["legacyRet", "legacy_ret"], ["legacyYield", "legacy_yield"], ["inflation", "inflation"], ["fxChange", "fx_change"],
+];
+
 /**
  * Repositório de dados do usuário. Em produção: Supabase com RLS (sessão do
  * usuário) e service role apenas para dados de mercado. Em LOCAL_DEV_MODE:
@@ -78,6 +104,11 @@ export interface Repo {
   saveSnapshot(s: SnapshotRow & { positions: unknown }): Promise<void>;
   getAlerts(limit?: number): Promise<AlertRow[]>;
   upsertAlerts(alerts: AlertRow[]): Promise<void>;
+  getProjectionSettings(): Promise<ProjectionForm | null>;
+  saveProjectionSettings(form: ProjectionForm): Promise<void>;
+  deleteProjectionSettings(): Promise<void>;
+  saveProjectionRun(run: ProjectionRunInput): Promise<string>;
+  listProjectionRuns(limit?: number): Promise<ProjectionRunSummary[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +316,93 @@ class SupabaseRepo implements Repo {
     if (!db || !alerts.length) return;
     await db.from("alerts").upsert(alerts.map((a) => ({ ...a, user_id: this.userId })) as never, { onConflict: "dedupe_key", ignoreDuplicates: true });
   }
+
+  async getProjectionSettings(): Promise<ProjectionForm | null> {
+    const [a, sc] = await Promise.all([
+      this.db.from("projection_assumptions").select("*").eq("user_id", this.userId).limit(1),
+      this.db.from("projection_scenarios").select("*").eq("user_id", this.userId),
+    ]);
+    const row = (this.check(a) as Record<string, unknown>[] | null)?.[0];
+    const scen = (this.check(sc) as Record<string, unknown>[] | null) ?? [];
+    if (!row || scen.length < 3) return null;
+    const scenarios = Object.fromEntries(SCENARIO_KEYS.map((k) => {
+      const r = scen.find((x) => x.scenario === k) ?? {};
+      const out: Record<string, unknown> = { reinvest: !!r.reinvest };
+      for (const [field, col] of SCENARIO_COLUMNS) out[field] = num(r[col]) ?? 0;
+      return [k, out];
+    })) as unknown as ProjectionForm["scenarios"];
+    return {
+      initialBrl: num(row.initial_brl) ?? 0,
+      initialUsd: num(row.initial_usd) ?? 0,
+      initialLegacyUsd: num(row.initial_legacy_usd) ?? 0,
+      monthlyContributionBrl: num(row.monthly_contribution_brl) ?? 0,
+      horizonMonths: Number(row.horizon_months),
+      brazilPct: num(row.brazil_pct) ?? 0,
+      exteriorPct: num(row.exterior_pct) ?? 100,
+      usdBrl: num(row.usd_brl) ?? 5,
+      contributionTiming: row.contribution_timing === "start" ? "start" : "end",
+      exteriorMode: row.exterior_mode === "single" ? "single" : "classes",
+      useCurrentAllocation: !!row.use_current_allocation,
+      classWeightsPct: row.class_weights as ProjectionForm["classWeightsPct"],
+      scenarios,
+      stress: row.stress as ProjectionForm["stress"],
+    };
+  }
+
+  async saveProjectionSettings(f: ProjectionForm) {
+    const now = new Date().toISOString();
+    this.check(await this.db.from("projection_assumptions").upsert({
+      user_id: this.userId, initial_brl: f.initialBrl, initial_usd: f.initialUsd, initial_legacy_usd: f.initialLegacyUsd,
+      monthly_contribution_brl: f.monthlyContributionBrl, horizon_months: f.horizonMonths, brazil_pct: f.brazilPct,
+      exterior_pct: f.exteriorPct, usd_brl: f.usdBrl, contribution_timing: f.contributionTiming, exterior_mode: f.exteriorMode,
+      use_current_allocation: f.useCurrentAllocation, class_weights: f.classWeightsPct, stress: f.stress, updated_at: now,
+    } as never, { onConflict: "user_id" }));
+    this.check(await this.db.from("projection_scenarios").upsert(SCENARIO_KEYS.map((k) => {
+      const sc = f.scenarios[k];
+      const row: Record<string, unknown> = { user_id: this.userId, scenario: k, reinvest: sc.reinvest, updated_at: now };
+      for (const [field, col] of SCENARIO_COLUMNS) row[col] = sc[field];
+      return row;
+    }) as never, { onConflict: "user_id,scenario" }));
+  }
+
+  async deleteProjectionSettings() {
+    this.check(await this.db.from("projection_scenarios").delete().eq("user_id", this.userId));
+    this.check(await this.db.from("projection_assumptions").delete().eq("user_id", this.userId));
+  }
+
+  async saveProjectionRun(run: ProjectionRunInput) {
+    const r = run.results;
+    const inserted = this.check(await this.db.from("projection_runs").insert({
+      user_id: this.userId, label: run.label, horizon_months: run.form.horizonMonths,
+      monthly_contribution_brl: run.form.monthlyContributionBrl,
+      final_pessimista_brl: r.pessimista.finalTotalBrl, final_moderado_brl: r.moderado.finalTotalBrl,
+      final_otimista_brl: r.otimista.finalTotalBrl, contributed_brl: r.moderado.initialCapitalBrl + r.moderado.contributionsBrl,
+      assumptions: run.form,
+      summary: Object.fromEntries(SCENARIO_KEYS.map((k) => { const { months: _m, ...rest } = r[k]; return [k, rest]; })),
+    } as never).select("id")) as { id: string }[];
+    const id = inserted[0].id;
+    const rows = SCENARIO_KEYS.flatMap((k) => r[k].months.map((m) => ({
+      run_id: id, scenario: k, month: m.month, total_brl: m.totalBrl, total_usd: m.totalUsd, real_total_brl: m.realTotalBrl,
+      contributed_brl: m.contributedBrl, brazil_brl: m.brazilBrl, exterior_usd: m.exteriorUsd, legacy_usd: m.legacyUsd,
+      income_brl: m.incomeBrl, reinvested_brl: m.reinvestedBrl, income_cash_brl: m.incomeCashBrl, usd_brl: m.fx,
+    })));
+    for (let i = 0; i < rows.length; i += 500) {
+      this.check(await this.db.from("projection_monthly_values").insert(rows.slice(i, i + 500) as never));
+    }
+    return id;
+  }
+
+  async listProjectionRuns(limit = 10) {
+    const rows = this.check(await this.db.from("projection_runs")
+      .select("id,label,created_at,horizon_months,monthly_contribution_brl,final_pessimista_brl,final_moderado_brl,final_otimista_brl,contributed_brl")
+      .eq("user_id", this.userId).order("created_at", { ascending: false }).limit(limit));
+    return ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id), label: (r.label as string) ?? null, created_at: String(r.created_at),
+      horizon_months: Number(r.horizon_months), monthly_contribution_brl: num(r.monthly_contribution_brl) ?? 0,
+      final: { pessimista: num(r.final_pessimista_brl) ?? 0, moderado: num(r.final_moderado_brl) ?? 0, otimista: num(r.final_otimista_brl) ?? 0 },
+      contributed_brl: num(r.contributed_brl) ?? 0,
+    }));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +420,7 @@ interface LocalData {
   recommendations: AllocationResult[];
   snapshots: SnapshotRow[];
   alerts: AlertRow[];
+  projectionRuns?: ProjectionRunSummary[];
 }
 
 const LOCAL_FILE = path.join(process.cwd(), ".dev-data.json");
@@ -375,6 +494,23 @@ class LocalRepo implements Repo {
       d.alerts = d.alerts.slice(0, 200);
     });
   }
+  async getProjectionSettings() { return (await this.getSetting<ProjectionForm>("projection")) ?? null; }
+  async saveProjectionSettings(f: ProjectionForm) { await this.setSetting("projection", f); }
+  async deleteProjectionSettings() { await this.mutate((d) => { delete d.settings.projection; }); }
+  async saveProjectionRun(run: ProjectionRunInput) {
+    const id = `local-${Date.now()}`;
+    const r = run.results;
+    await this.mutate((d) => {
+      d.projectionRuns = [{
+        id, label: run.label, created_at: new Date().toISOString(), horizon_months: run.form.horizonMonths,
+        monthly_contribution_brl: run.form.monthlyContributionBrl,
+        final: { pessimista: r.pessimista.finalTotalBrl, moderado: r.moderado.finalTotalBrl, otimista: r.otimista.finalTotalBrl },
+        contributed_brl: r.moderado.initialCapitalBrl + r.moderado.contributionsBrl,
+      }, ...(d.projectionRuns ?? [])].slice(0, 30);
+    });
+    return id;
+  }
+  async listProjectionRuns(limit = 10) { return ((await this.load()).projectionRuns ?? []).slice(0, limit); }
 }
 
 export async function getRepo(userId: string): Promise<Repo> {

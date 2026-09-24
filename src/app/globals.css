@@ -242,3 +242,11 @@ ul.clean li { margin: 2px 0; }
 .login-card { width: 100%; max-width: 380px; }
 
 .badge-wrap { white-space: normal; border-radius: 8px; }
+
+/* Campo numérico do simulador */
+.numfield { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 0 8px; min-width: 0; }
+.numfield input { border: 0; padding: 7px 2px; width: 100%; min-width: 0; background: transparent; text-align: right; font-variant-numeric: tabular-nums; }
+.numfield input:focus { outline: none; }
+.numfield:focus-within { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; }
+.numfield[data-invalid] { border-color: var(--neg); }
+input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width: 100%; }

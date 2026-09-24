@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/", label: "Painel" },
   { href: "/carteira", label: "Carteira" },
   { href: "/estrategia", label: "Estratégia" },
+  { href: "/projecao", label: "Projeção Patrimonial" },
   { href: "/relatorio", label: "Relatório" },
 ];
 
