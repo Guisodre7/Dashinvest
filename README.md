@@ -49,7 +49,7 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 ## Configuração
 
 1. **Supabase**
-   - Crie o projeto e rode `supabase/migrations/0001_init.sql` e `0002_projection.sql`, nessa ordem, no SQL Editor (ou use `supabase db push`).
+   - Crie o projeto e rode `supabase/migrations/0001_init.sql`, `0002_projection.sql` e `0003_harden_functions.sql`, nessa ordem, no SQL Editor (ou use `supabase db push`).
    - Em *Authentication → Providers*, **desative novos cadastros (signups)**. Crie seu usuário com senha forte em *Authentication → Users*.
    - Depois rode `select public.bootstrap_owner('seu-email@exemplo.com');`. Isso autoriza o usuário e cria a estratégia inicial.
    - Em *Authentication → MFA*, habilite TOTP.
