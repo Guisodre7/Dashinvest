@@ -1,12 +1,13 @@
 import "server-only";
+import { supabasePublicConfig } from "./runtime-env";
 
 /**
  * Configuração server-side. Nunca importar em componentes cliente —
  * `server-only` garante erro de build caso isso aconteça.
  */
 export const serverConfig = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  supabaseUrl: supabasePublicConfig().url,
+  supabaseAnonKey: supabasePublicConfig().anonKey,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   allowedEmail: (process.env.ALLOWED_EMAIL ?? "").trim().toLowerCase(),
   requireMfa: process.env.REQUIRE_MFA !== "false",

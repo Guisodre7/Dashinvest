@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { createSupabaseBrowserClient, type SupabasePublicConfig } from "@/lib/supabase/browser";
 
 type State =
   | { step: "loading" }
@@ -9,7 +9,7 @@ type State =
   | { step: "verify"; factorId: string }
   | { step: "error"; message: string };
 
-export default function MfaForm() {
+export default function MfaForm({ config: supabase_cfg }: { config: SupabasePublicConfig }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ step: "loading" });
   const [code, setCode] = useState("");
@@ -17,7 +17,7 @@ export default function MfaForm() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowserClient(supabase_cfg);
     (async () => {
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === "aal2") { router.replace("/"); return; }
@@ -38,7 +38,7 @@ export default function MfaForm() {
     if (state.step !== "enroll" && state.step !== "verify") return;
     setBusy(true);
     setError(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowserClient(supabase_cfg);
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: state.factorId, code: code.trim() });
     setBusy(false);
     if (error) { setError("Código inválido."); return; }

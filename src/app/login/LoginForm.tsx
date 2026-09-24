@@ -1,9 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { createSupabaseBrowserClient, type SupabasePublicConfig } from "@/lib/supabase/browser";
 
-export default function LoginForm() {
+export default function LoginForm({ config: supabase_cfg }: { config: SupabasePublicConfig }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,8 +14,13 @@ export default function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!supabase_cfg.url || !supabase_cfg.anonKey) {
+      setBusy(false);
+      setError("Servidor sem configuração do Supabase. Verifique as variáveis na Vercel e faça Redeploy.");
+      return;
+    }
+    const supabase = createSupabaseBrowserClient(supabase_cfg);
+    const { error } = await supabase.auth.signInWithPassword({ email, password }).catch(() => ({ error: new Error("rede") }));
     setBusy(false);
     if (error) {
       // Mensagem genérica: não revela se o e-mail existe.

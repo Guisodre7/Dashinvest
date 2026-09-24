@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabasePublicConfig } from "./lib/runtime-env";
 
 /**
  * Proxy de autenticação (antigo middleware). Toda rota, exceto login,
@@ -17,8 +18,7 @@ export async function proxy(request: NextRequest) {
   if (process.env.LOCAL_DEV_MODE === "true" && process.env.NODE_ENV !== "production") return response;
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p))) return response;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url, anonKey: key } = supabasePublicConfig();
   if (!url || !key) return deny(request, "unauthenticated");
 
   let res = response;

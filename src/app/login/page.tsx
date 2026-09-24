@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { isLocalDevMode } from "@/lib/devmode";
+import { supabasePublicConfig } from "@/lib/runtime-env";
 import LoginForm from "./LoginForm";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   if (isLocalDevMode()) redirect("/");
@@ -13,7 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="muted small">Acesso restrito ao titular.</p>
         </div>
         {error === "forbidden" && <div className="banner banner-neg">Conta não autorizada para este painel.</div>}
-        <LoginForm />
+        <LoginForm config={supabasePublicConfig()} />
       </div>
     </main>
   );
