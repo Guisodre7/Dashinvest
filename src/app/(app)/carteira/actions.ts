@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import { invalidateUserContext } from "@/lib/data/load";
 import { getRepo } from "@/lib/db/repo";
 
 const TICKER = /^[A-Z.]{1,10}$/;
@@ -31,6 +32,7 @@ export interface FormState { ok: boolean; message: string | null }
 async function run(fn: () => Promise<string>): Promise<FormState> {
   try {
     const message = await fn();
+    invalidateUserContext((await requireUser()).id);
     revalidatePath("/", "layout");
     return { ok: true, message };
   } catch (err) {

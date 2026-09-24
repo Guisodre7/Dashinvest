@@ -52,10 +52,37 @@ export async function loadSettings(repo: Repo): Promise<EngineSettings> {
   return mergeSettings(await repo.getSetting<Partial<EngineSettings>>("engine"));
 }
 
-/** Carrega e analisa a carteira inteira. Deduplicado por request via React cache. */
-export const loadContext = cache(async (user: SessionUser, opts: { tickers?: string[]; repo?: Repo } = {}): Promise<LoadedContext> => {
-  const provider = getMarketDataProvider();
+// ---------------------------------------------------------------------------
+// Cache curto em memória (por instância do servidor): navegar entre as abas
+// não refaz todas as consultas. Os preços continuam ao vivo no navegador
+// (LiveQuotes) e cada dado mantém seu timestamp. Invalidado ao salvar dados.
+// ---------------------------------------------------------------------------
+const CONTEXT_TTL_MS = 20_000;
+const contextCache = new Map<string, { at: number; data: Promise<Omit<LoadedContext, "repo">> }>();
+
+export function invalidateUserContext(userId: string) {
+  for (const key of contextCache.keys()) if (key.startsWith(`${userId}|`)) contextCache.delete(key);
+}
+
+/** Carrega e analisa a carteira inteira. Deduplicado por request (React cache) e por 20s em memória. */
+export const loadContext = cache(async (user: SessionUser, opts: { tickers?: string[]; repo?: Repo; fresh?: boolean } = {}): Promise<LoadedContext> => {
   const repo = opts.repo ?? (await getRepo(user.id));
+  // O repositório é por request (cookies da sessão) — nunca entra no cache.
+  if (opts.repo || opts.fresh) return { ...(await computeContext(user, repo, opts.tickers)), repo };
+  const key = `${user.id}|${(opts.tickers ?? []).join(",")}`;
+  const hit = contextCache.get(key);
+  if (hit && Date.now() - hit.at < CONTEXT_TTL_MS) {
+    try { return { ...(await hit.data), repo }; } catch { contextCache.delete(key); }
+  }
+  const data = computeContext(user, repo, opts.tickers);
+  contextCache.set(key, { at: Date.now(), data });
+  data.catch(() => contextCache.delete(key));
+  if (contextCache.size > 50) contextCache.delete(contextCache.keys().next().value!);
+  return { ...(await data), repo };
+});
+
+async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string[]): Promise<Omit<LoadedContext, "repo">> {
+  const provider = getMarketDataProvider();
   const errors: string[] = [];
   const now = new Date();
 
@@ -64,7 +91,7 @@ export const loadContext = cache(async (user: SessionUser, opts: { tickers?: str
     repo.getSetting<number>("opportunity_cash_balance"), repo.getAlerts(40).catch(() => []),
   ]);
   const allTickers = [...new Set([...strategy.map((s) => s.ticker), ...positions.map((p) => p.ticker)])];
-  const tickers = opts.tickers ?? allTickers;
+  const tickers = tickersOpt ?? allTickers;
 
   const from = now.toISOString().slice(0, 10);
   const to = new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10);
@@ -152,13 +179,13 @@ export const loadContext = cache(async (user: SessionUser, opts: { tickers?: str
   }));
 
   return {
-    user, repo, settings, strategy, portfolio, analyses, quotes, fx, fxStale, macro, regime,
+    user, settings, strategy, portfolio, analyses, quotes, fx, fxStale, macro, regime,
     impacts: macroImpacts(regime), marketNews: (marketNews ?? []).slice(0, 20), macroEvents, alerts,
     providerName: provider.name, isDemo: isDemoProvider(), errors,
     opportunityCashBalance: typeof cashBalance === "number" ? cashBalance : 0,
     loadedAt: now.toISOString(),
   };
-});
+}
 
 function mergeAlerts(derived: AlertRow[], stored: AlertRow[]): AlertRow[] {
   const keys = new Set(derived.map((d) => d.dedupe_key));

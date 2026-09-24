@@ -21,7 +21,7 @@ export const serverConfig = {
   alphaVantageRealtime: process.env.ALPHA_VANTAGE_REALTIME === "true",
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  llmModel: process.env.LLM_MODEL ?? "claude-sonnet-5",
+  llmModel: process.env.LLM_MODEL ?? "claude-opus-5",
 } as const;
 
 export { freshnessConfig } from "./freshness-config";

@@ -46,6 +46,25 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - **Banco** (`supabase/migrations/0002_projection.sql`): `projection_assumptions`, `projection_scenarios`, `projection_runs`, `projection_monthly_values` (NUMERIC + RLS).
 - Os defaults são premissas editáveis, não expectativas de mercado. "Restaurar premissas padrão" apaga as premissas salvas.
 
+## Leitura de comprovantes (Carteira → Registrar compra)
+
+- O botão **📷 Ler comprovante** aceita foto, print ou PDF da confirmação da ordem. No navegador, a imagem é reduzida para no máximo 2000 px. Em seguida vai para `/api/ocr/trade` (autenticado), que usa o Claude com visão e saída estruturada validada por zod (`src/lib/ocr/extract.ts`).
+- O resultado passa por validação determinística (`src/lib/ocr/normalize.ts`):
+  - normaliza o ticker (ex.: `BRK B` → `BRK.B`);
+  - confere quantidade × preço contra o valor do comprovante;
+  - avisa sobre venda, moeda diferente de USD, data futura ou ticker não cadastrado;
+  - descarta câmbio fora da faixa;
+  - nunca inventa campos.
+- Os campos são **pré-preenchidos e destacados** para revisão. Nada é gravado sem o clique em "Confirmar e registrar compra". O arquivo não é armazenado.
+- Requer `ANTHROPIC_API_KEY`. Sem a chave, o sistema mostra um aviso e o registro manual continua funcionando.
+
+## Navegação
+
+- `loading.tsx` mostra um esqueleto imediatamente ao trocar de aba.
+- Cache do roteador (`staleTimes.dynamic = 30s`): páginas visitadas reabrem na hora. Os preços continuam ao vivo via polling.
+- Análise da carteira reutilizada por 20 s em memória por usuário (`loadContext`), invalidada em qualquer alteração de dados. O cálculo do aporte sempre usa dados novos.
+- Cotações com 5 s de cache compartilhado; cada cotação mantém o timestamp do fornecedor, e a idade exibida é real.
+
 ## Configuração
 
 1. **Supabase**

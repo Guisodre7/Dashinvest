@@ -13,6 +13,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Páginas já visitadas reabrem na hora por 30s (preços seguem ao vivo via polling).
+    staleTimes: { dynamic: 30, static: 300 },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

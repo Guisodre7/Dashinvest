@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
+import BuyTradeForm from "@/components/BuyTradeForm";
 import HistoryChart from "@/components/HistoryChart";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
@@ -82,6 +83,11 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
 
       <section className="section grid grid-2">
         <div className="card">
+          <h3>Registrar compra (aporte)</h3>
+          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos.</p>
+          <BuyTradeForm action={registerBuy} tickers={tickers} />
+        </div>
+        <div className="card">
           <h3>Cadastrar / corrigir posição</h3>
           <p className="xsmall faint" style={{ marginBottom: 8 }}>Substitui a posição do ativo. Use para importar a carteira atual. O câmbio médio (R$/US$) permite separar retorno cambial.</p>
           <ActionForm action={savePosition} submitLabel="Salvar posição">
@@ -93,20 +99,6 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
             <label>Corretora<input name="broker" /></label>
             <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
             <label>Moeda<select name="currency" defaultValue="USD"><option>USD</option></select></label>
-          </ActionForm>
-        </div>
-        <div className="card">
-          <h3>Registrar compra (aporte)</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente.</p>
-          <ActionForm action={registerBuy} submitLabel="Registrar compra">
-            <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
-            <label>Quantidade<input name="quantity" inputMode="decimal" required /></label>
-            <label>Preço (US$)<input name="price" inputMode="decimal" required /></label>
-            <label>Câmbio (R$/US$)<input name="fx_rate" inputMode="decimal" /></label>
-            <label>Data<input name="trade_date" type="date" /></label>
-            <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
-            <label>Corretora<input name="broker" /></label>
-            <label>Observação<input name="notes" /></label>
           </ActionForm>
         </div>
       </section>

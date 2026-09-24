@@ -16,7 +16,8 @@ export async function calculateContribution(_prev: ContributionState, formData: 
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
     return { result: null, error: "Informe um valor de aporte válido em US$." };
   }
-  const ctx = await loadContext(user);
+  // Cálculo do aporte sempre com dados novos (a validade das cotações é decisiva aqui).
+  const ctx = await loadContext(user, { fresh: true });
   const values = Object.fromEntries(ctx.portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0]));
   const globalBlockReasons: string[] = [];
   const missingPrice = ctx.portfolio.missingPrices;

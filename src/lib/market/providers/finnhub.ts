@@ -56,7 +56,8 @@ export class FinnhubProvider implements MarketDataProvider {
   async getQuote(ticker: string): Promise<Quote> {
     const [q, profile, metric] = await Promise.all([
       this.get<{ c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number }>(
-        "/quote", { symbol: symbol(ticker) }, 0, ticker),
+        // 5s de cache compartilhado; o timestamp da cotação continua sendo o do fornecedor.
+        "/quote", { symbol: symbol(ticker) }, 5, ticker),
       this.optional<{ name?: string }>("/stock/profile2", { symbol: symbol(ticker) }, 86_400, ticker).catch(() => null),
       this.metrics(ticker).catch(() => null),
     ]);
