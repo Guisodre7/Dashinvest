@@ -1,5 +1,5 @@
 import "server-only";
-import { supabasePublicConfig } from "./runtime-env";
+import { allowedEmails, supabasePublicConfig } from "./runtime-env";
 
 /**
  * Configuração server-side. Nunca importar em componentes cliente —
@@ -9,7 +9,8 @@ export const serverConfig = {
   supabaseUrl: supabasePublicConfig().url,
   supabaseAnonKey: supabasePublicConfig().anonKey,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
-  allowedEmail: (process.env.ALLOWED_EMAIL ?? "").trim().toLowerCase(),
+  /** Primeiro e-mail autorizado (usado pelo cron como identificação do dono). */
+  allowedEmail: allowedEmails()[0] ?? "",
   requireMfa: process.env.REQUIRE_MFA !== "false",
   cronSecret: process.env.CRON_SECRET ?? "",
 

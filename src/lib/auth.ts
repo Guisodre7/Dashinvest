@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { serverConfig } from "./config";
 import { isLocalDevMode } from "./devmode";
+import { allowedEmails } from "./runtime-env";
 import { createSupabaseServerClient } from "./supabase/server";
 
 export interface SessionUser {
@@ -14,7 +15,7 @@ export const DEV_USER: SessionUser = { id: "00000000-0000-0000-0000-000000000001
 
 /**
  * Valida a sessão no servidor (JWT verificado via getClaims) e aplica:
- *  - allowlist de e-mail único (ALLOWED_EMAIL);
+ *  - allowlist de e-mails (ALLOWED_EMAIL, um ou vários separados por vírgula);
  *  - MFA obrigatório (aal2) quando REQUIRE_MFA != "false".
  */
 export async function getSessionUser(): Promise<{ user: SessionUser | null; reason?: "unauthenticated" | "forbidden" | "mfa" }> {
@@ -27,7 +28,7 @@ export async function getSessionUser(): Promise<{ user: SessionUser | null; reas
   if (error || !claims?.sub) return { user: null, reason: "unauthenticated" };
 
   const email = String(claims.email ?? "").toLowerCase();
-  if (!serverConfig.allowedEmail || email !== serverConfig.allowedEmail) return { user: null, reason: "forbidden" };
+  if (!allowedEmails().includes(email)) return { user: null, reason: "forbidden" };
 
   const aal = (claims.aal as "aal1" | "aal2") ?? "aal1";
   const user = { id: claims.sub, email, aal };

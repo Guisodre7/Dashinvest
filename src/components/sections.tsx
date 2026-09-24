@@ -37,7 +37,7 @@ export function WhereToInvest({ preview, analyses }: { preview: AllocationResult
   }
   return (
     <div className="table-wrap">
-      <table>
+      <table className="mobile-cards">
         <thead>
           <tr><th>Ativo</th><th>Prioridade</th><th className="num">Score</th><th>Peso atual → alvo</th><th className="num">Desvio</th><th>Sinais</th><th>Confiança</th></tr>
         </thead>
@@ -47,13 +47,13 @@ export function WhereToInvest({ preview, analyses }: { preview: AllocationResult
             const signals = a.signals.filter((s) => s.kind !== "STALE_DATA");
             return (
               <tr key={l.ticker}>
-                <td><Link href={assetHref(l.ticker)} className="ticker">{l.ticker}</Link><div className="xsmall faint">{l.bucket}</div></td>
-                <td><span className={`badge ${l.priority === "ALTA" ? "badge-pos" : ""}`}>{l.priority}</span> <span className="xsmall muted">{l.action}</span></td>
-                <td className="num"><ScoreBadge score={l.opportunityScore} /></td>
-                <td style={{ minWidth: 140 }}><WeightBar current={l.currentWeight} target={l.targetWeight} /><div className="xsmall muted num">{n(l.currentWeight, 2)}% → {n(l.targetWeight, 2)}%</div></td>
-                <td className={`num ${l.gap > 1 ? "" : l.gap < -1 ? "warn" : ""}`}>{pp(l.gap)}</td>
-                <td className="small">{signals.length ? signals.slice(0, 2).map((s) => <div key={s.kind} className={s.tone === "positive" ? "pos" : s.tone === "negative" ? "neg" : "muted"}>{s.title}</div>) : <span className="faint">—</span>}</td>
-                <td className="small">{l.confidence}{a.dataQuality.criticalStale && <div className="neg xsmall">cotação desatualizada</div>}</td>
+                <td className="cell-main"><Link href={assetHref(l.ticker)} className="ticker">{l.ticker}</Link><div className="xsmall faint">{l.bucket}</div></td>
+                <td data-label="Prioridade"><span className={`badge ${l.priority === "ALTA" ? "badge-pos" : ""}`}>{l.priority}</span> <span className="xsmall muted">{l.action}</span></td>
+                <td data-label="Score" className="num"><ScoreBadge score={l.opportunityScore} /></td>
+                <td data-label="Peso atual → alvo" className="cell-full m-o1" style={{ minWidth: 140 }}><WeightBar current={l.currentWeight} target={l.targetWeight} /><div className="xsmall muted num">{n(l.currentWeight, 2)}% → {n(l.targetWeight, 2)}%</div></td>
+                <td data-label="Desvio" className={`num ${l.gap > 1 ? "" : l.gap < -1 ? "warn" : ""}`}>{pp(l.gap)}</td>
+                <td data-label="Sinais" className="m-span2 m-o2 small">{signals.length ? signals.slice(0, 2).map((s) => <div key={s.kind} className={s.tone === "positive" ? "pos" : s.tone === "negative" ? "neg" : "muted"}>{s.title}</div>) : <span className="faint">—</span>}</td>
+                <td data-label="Confiança" className="m-o2 small">{l.confidence}{a.dataQuality.criticalStale && <div className="neg xsmall">cotação desatualizada</div>}</td>
               </tr>
             );
           })}
@@ -93,7 +93,7 @@ export function AlertsList({ alerts, extra }: { alerts: AlertRow[]; extra: { sev
 export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
   return (
     <div className="table-wrap">
-      <table>
+      <table className="mobile-cards">
         <thead>
           <tr>
             <th>Ativo</th><th className="num">Preço</th><th className="num">Dia</th><th className="num">Qtd.</th><th className="num">Preço médio</th>
@@ -104,27 +104,27 @@ export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
         <tbody>
           {portfolio.positions.map((p) => (
             <tr key={p.ticker}>
-              <td>
+              <td className="cell-main">
                 <Link href={assetHref(p.ticker)} className="ticker">{p.ticker}</Link>
                 <div className="xsmall faint">{p.isLegacy ? p.legacyLabel ?? "Legado" : p.bucket}</div>
               </td>
-              <td className="num"><LivePrice ticker={p.ticker} fallback={p.price} /></td>
-              <td className="num"><LiveChange ticker={p.ticker} /></td>
-              <td className="num">{p.quantity ? n(p.quantity, 4) : "—"}</td>
-              <td className="num">{p.quantity ? n(p.avgPrice) : "—"}</td>
-              <td className="num">{n(p.valueUsd)}</td>
-              <td className={`num ${tone(p.pnlUsd)}`}>{p.quantity ? n(p.pnlUsd) : "—"}</td>
-              <td className={`num ${tone(p.assetReturn)}`}>{pct(p.assetReturn, 1, true)}</td>
-              <td className={`num ${tone(p.fxReturn)}`}>{pct(p.fxReturn, 1, true)}</td>
-              <td className={`num ${tone(p.totalReturnBrl)}`}>{pct(p.totalReturnBrl, 1, true)}</td>
-              <td className="num">{p.dividendsUsd ? n(p.dividendsUsd) : "—"}</td>
-              <td style={{ minWidth: 150 }}>
+              <td data-label="Preço" className="num"><LivePrice ticker={p.ticker} fallback={p.price} /></td>
+              <td data-label="Dia" className="num"><LiveChange ticker={p.ticker} /></td>
+              <td data-label="Qtd." className="num">{p.quantity ? n(p.quantity, 4) : "—"}</td>
+              <td data-label="Preço médio" className="num">{p.quantity ? n(p.avgPrice) : "—"}</td>
+              <td data-label="Valor (US$)" className="num">{n(p.valueUsd)}</td>
+              <td data-label="L/P (US$)" className={`num ${tone(p.pnlUsd)}`}>{p.quantity ? n(p.pnlUsd) : "—"}</td>
+              <td data-label="Ret. ativo" className={`num ${tone(p.assetReturn)}`}>{pct(p.assetReturn, 1, true)}</td>
+              <td data-label="Ret. câmbio" className={`num ${tone(p.fxReturn)}`}>{pct(p.fxReturn, 1, true)}</td>
+              <td data-label="Ret. total BRL" className={`num ${tone(p.totalReturnBrl)}`}>{pct(p.totalReturnBrl, 1, true)}</td>
+              <td data-label="Proventos" className="num m-o1">{p.dividendsUsd ? n(p.dividendsUsd) : "—"}</td>
+              <td className="cell-full m-o2" data-label="Peso atual / alvo" style={{ minWidth: 150 }}>
                 {p.isLegacy
                   ? <span className="xsmall muted">{n(p.weightTotal, 2)}% do total · sem aportes</span>
                   : <><WeightBar current={p.weightStrategic} target={p.targetWeight} /><div className="xsmall muted num">{n(p.weightStrategic, 2)}% / {n(p.targetWeight, 2)}%</div></>}
               </td>
-              <td className="num">{p.isLegacy ? "—" : pp(p.gap)}</td>
-              <td><LiveFreshness ticker={p.ticker} /></td>
+              <td data-label="Desvio" className="num m-o1">{p.isLegacy ? "—" : pp(p.gap)}</td>
+              <td className="cell-full m-o3" data-label="Dados"><LiveFreshness ticker={p.ticker} /></td>
             </tr>
           ))}
         </tbody>

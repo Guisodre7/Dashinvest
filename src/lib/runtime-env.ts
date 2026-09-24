@@ -15,3 +15,8 @@ export function supabasePublicConfig() {
     anonKey: runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   };
 }
+
+/** E-mails autorizados (ALLOWED_EMAIL aceita um ou vários, separados por vírgula). */
+export function allowedEmails(): string[] {
+  return runtimeEnv("ALLOWED_EMAIL").toLowerCase().split(/[,;\s]+/).filter(Boolean);
+}
