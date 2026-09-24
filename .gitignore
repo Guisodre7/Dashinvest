@@ -9,3 +9,4 @@ next-env.d.ts
 coverage
 .dev-data.json
 dashinvest-vercel.env
+public/ocr

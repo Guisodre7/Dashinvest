@@ -376,3 +376,7 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 .ocr-preview { max-height: 140px; max-width: 100%; border-radius: 8px; border: 1px solid var(--border); object-fit: contain; align-self: flex-start; }
 .ocr-filled { border-color: var(--accent) !important; background: var(--accent-soft) !important; }
 @media (max-width: 640px) { .ocr-drop .btn { width: 100%; } }
+.ocr-paste { display: flex; flex-direction: column; gap: 8px; }
+.ocr-paste[open] { gap: 8px; }
+.ocr-paste summary { cursor: pointer; }
+.ocr-paste textarea { width: 100%; resize: vertical; margin: 6px 0; }

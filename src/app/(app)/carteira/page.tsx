@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
 import BuyTradeForm from "@/components/BuyTradeForm";
+import { serverConfig } from "@/lib/config";
 import HistoryChart from "@/components/HistoryChart";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
@@ -84,8 +85,8 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
       <section className="section grid grid-2">
         <div className="card">
           <h3>Registrar compra (aporte)</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos.</p>
-          <BuyTradeForm action={registerBuy} tickers={tickers} />
+          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos automaticamente.</p>
+          <BuyTradeForm action={registerBuy} tickers={tickers} aiAvailable={!!serverConfig.anthropicApiKey} />
         </div>
         <div className="card">
           <h3>Cadastrar / corrigir posição</h3>

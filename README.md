@@ -46,17 +46,18 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - **Banco** (`supabase/migrations/0002_projection.sql`): `projection_assumptions`, `projection_scenarios`, `projection_runs`, `projection_monthly_values` (NUMERIC + RLS).
 - Os defaults são premissas editáveis, não expectativas de mercado. "Restaurar premissas padrão" apaga as premissas salvas.
 
-## Leitura de comprovantes (Carteira → Registrar compra)
+## Leitura de comprovantes (Carteira → Registrar compra) — gratuita
 
-- O botão **📷 Ler comprovante** aceita foto, print ou PDF da confirmação da ordem. No navegador, a imagem é reduzida para no máximo 2000 px. Em seguida vai para `/api/ocr/trade` (autenticado), que usa o Claude com visão e saída estruturada validada por zod (`src/lib/ocr/extract.ts`).
-- O resultado passa por validação determinística (`src/lib/ocr/normalize.ts`):
-  - normaliza o ticker (ex.: `BRK B` → `BRK.B`);
-  - confere quantidade × preço contra o valor do comprovante;
-  - avisa sobre venda, moeda diferente de USD, data futura ou ticker não cadastrado;
-  - descarta câmbio fora da faixa;
-  - nunca inventa campos.
-- Os campos são **pré-preenchidos e destacados** para revisão. Nada é gravado sem o clique em "Confirmar e registrar compra". O arquivo não é armazenado.
-- Requer `ANTHROPIC_API_KEY`. Sem a chave, o sistema mostra um aviso e o registro manual continua funcionando.
+- O botão **📷 Ler comprovante** aceita foto, print ou PDF. A leitura roda **no navegador**, sem API, sem custo e sem enviar a imagem a ninguém:
+  - imagem → OCR com Tesseract.js (wasm, inglês + português) (`src/lib/ocr/localOcr.ts`);
+  - PDF com texto → leitura direta via pdf.js; PDF escaneado → OCR da 1ª página;
+  - também dá para **colar o texto** do e-mail ou da notificação da corretora.
+- O texto vira campos por regras determinísticas (`src/lib/ocr/parseText.ts`):
+  - formatos pt-BR e en-US, rótulos das corretoras, `10 BRK B @ 480.25`, `2,5 cotas de X a US$ Y`, datas por extenso;
+  - depois passa pela validação (`src/lib/ocr/normalize.ts`), que confere quantidade × preço contra o valor, venda, moeda, data futura, câmbio e ativo não cadastrado. Nada é inventado.
+- Os campos lidos ficam **destacados** para revisão. Nada é gravado sem o clique em "Confirmar e registrar compra".
+- Os arquivos do motor (~16 MB, baixados uma vez e guardados em cache) são copiados para `public/ocr` por `scripts/copy-ocr-assets.mjs` antes do `dev`/`build`, e servidos pelo próprio site.
+- Opcional: com `ANTHROPIC_API_KEY` configurada, aparece o botão "Tentar leitura com IA" quando a leitura local fica incompleta (`/api/ocr/trade`). Sem a chave, tudo funciona normalmente.
 
 ## Navegação
 

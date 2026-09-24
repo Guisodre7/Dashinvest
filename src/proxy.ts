@@ -89,6 +89,6 @@ function deny(request: NextRequest, reason: "unauthenticated" | "forbidden", sou
 }
 
 export const config = {
-  // Ícones e manifest ficam públicos (necessários para instalar na tela inicial).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon|pwa-icon|manifest.webmanifest).*)"],
+  // Ícones, manifest e o motor de OCR local (arquivos estáticos, sem dados) ficam públicos.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon|pwa-icon|manifest.webmanifest|ocr/).*)"],
 };

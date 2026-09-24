@@ -18,7 +18,11 @@ const nextConfig: NextConfig = {
     staleTimes: { dynamic: 30, static: 300 },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Motor de OCR local (arquivos estáticos versionados pelo pacote): cache longo no navegador.
+      { source: "/ocr/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=2592000, immutable" }] },
+    ];
   },
 };
 

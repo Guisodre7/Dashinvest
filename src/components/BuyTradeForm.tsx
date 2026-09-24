@@ -1,6 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
-import type { TradeDraft } from "@/lib/ocr/normalize";
+import { normalizeTrade, type NormalizedTrade, type TradeDraft } from "@/lib/ocr/normalize";
+import { parseTradeText } from "@/lib/ocr/parseText";
 
 type State = { ok: boolean; message: string | null };
 type Fields = { ticker: string; quantity: string; price: string; fx_rate: string; trade_date: string; fees: string; broker: string; notes: string };
@@ -23,10 +24,12 @@ async function compressImage(file: File): Promise<Blob> {
 const fmt = (v: number | null, digits = 6) => (v === null ? "" : String(Number(v.toFixed(digits))));
 
 export default function BuyTradeForm({
-  action, tickers,
+  action, tickers, aiAvailable = false,
 }: {
   action: (s: State, fd: FormData) => Promise<State>;
   tickers: string[];
+  /** Leitura com IA (paga) disponível no servidor — opcional, só como segunda tentativa. */
+  aiAvailable?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, { ok: true, message: null });
   const [fields, setFields] = useState<Fields>({ ...EMPTY, ticker: tickers[0] ?? "" });
@@ -36,6 +39,10 @@ export default function BuyTradeForm({
   const [readError, setReadError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [extraTicker, setExtraTicker] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [incomplete, setIncomplete] = useState(false);
+  const [pasted, setPasted] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Após registrar com sucesso, limpa o formulário.
@@ -51,39 +58,83 @@ export default function BuyTradeForm({
     setFilled((s) => { const n = new Set(s); n.delete(k); return n; });
   };
 
+  /** Aplica o rascunho validado aos campos (destacando o que foi preenchido). */
+  function applyDraft(n: NormalizedTrade, extraWarnings: string[] = []) {
+    const d: TradeDraft = n.draft;
+    const next: Partial<Fields> = {};
+    if (d.ticker) {
+      next.ticker = d.ticker;
+      setExtraTicker(tickers.includes(d.ticker) ? null : d.ticker);
+    }
+    if (d.quantity !== null) next.quantity = fmt(d.quantity, 8);
+    if (d.price !== null) next.price = fmt(d.price, 6);
+    if (d.fx_rate !== null) next.fx_rate = fmt(d.fx_rate, 4);
+    if (d.trade_date) next.trade_date = d.trade_date;
+    if (d.fees !== null) next.fees = fmt(d.fees, 2);
+    if (d.broker) next.broker = d.broker;
+    if (n.filled.length) next.notes = "Lido do comprovante";
+    // Cada leitura parte do formulário limpo — nunca mistura valores de leituras anteriores.
+    setFields({ ...EMPTY, ticker: tickers[0] ?? "", ...next });
+    setFilled(new Set(n.filled));
+    setWarnings([...extraWarnings, ...n.warnings]);
+    setIncomplete(!d.ticker || d.quantity === null || d.price === null);
+  }
+
+  function resetRead() {
+    setReadError(null); setWarnings([]); setIncomplete(false);
+  }
+
+  /** Leitura gratuita, no próprio aparelho: OCR local (imagem/PDF escaneado) ou texto do PDF. */
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setReadError(null); setWarnings([]); setReading(true);
+    resetRead(); setReading(true); setLastFile(file);
     setPreview(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
     try {
-      const blob = await compressImage(file);
+      const { ocrImage, readPdf } = await import("@/lib/ocr/localOcr");
+      const onProgress = (label: string, frac: number | null) => setProgress(frac === null ? label : `${label} ${Math.round(frac * 100)}%`);
+      const r = file.type === "application/pdf"
+        ? await readPdf(file, onProgress)
+        : await ocrImage(await compressImage(file), onProgress);
+      const n = normalizeTrade(parseTradeText(r.text, tickers), tickers);
+      if (!n.ok) {
+        setReadError("Não encontrei os dados de uma ordem neste arquivo. Tente um print mais nítido, recortado na confirmação da ordem, ou cole o texto abaixo.");
+        setIncomplete(true);
+        return;
+      }
+      applyDraft(n, r.confidence < 70 ? [`Leitura com baixa nitidez (${Math.round(r.confidence)}%) — confira cada campo.`] : []);
+    } catch {
+      setReadError("Não foi possível ler o arquivo neste aparelho. Tente outro formato (JPG/PNG/PDF) ou cole o texto.");
+    } finally {
+      setReading(false); setProgress(null);
+    }
+  }
+
+  /** Texto colado (e-mail de confirmação, notificação da corretora…). */
+  function onPaste() {
+    resetRead();
+    const n = normalizeTrade(parseTradeText(pasted, tickers), tickers);
+    if (!n.ok) { setReadError("Não encontrei os dados de uma ordem no texto colado."); return; }
+    applyDraft(n);
+  }
+
+  /** Segunda tentativa opcional com IA (servidor; somente se configurada). */
+  async function onAi() {
+    if (!lastFile) return;
+    resetRead(); setReading(true); setProgress("Lendo com IA");
+    try {
+      const blob = await compressImage(lastFile);
       const body = new FormData();
-      body.append("file", blob, blob === file ? file.name : "comprovante.jpg");
+      body.append("file", blob, blob === lastFile ? lastFile.name : "comprovante.jpg");
       const res = await fetch("/api/ocr/trade", { method: "POST", body });
       const data = await res.json().catch(() => ({ error: "Resposta inválida do servidor." }));
       if (!res.ok) { setReadError(data.error ?? `Falha na leitura (HTTP ${res.status}).`); return; }
-      const d = data.draft as TradeDraft;
-      const next: Partial<Fields> = {};
-      if (d.ticker) {
-        next.ticker = d.ticker;
-        setExtraTicker(tickers.includes(d.ticker) ? null : d.ticker);
-      }
-      if (d.quantity !== null) next.quantity = fmt(d.quantity, 8);
-      if (d.price !== null) next.price = fmt(d.price, 6);
-      if (d.fx_rate !== null) next.fx_rate = fmt(d.fx_rate, 4);
-      if (d.trade_date) next.trade_date = d.trade_date;
-      if (d.fees !== null) next.fees = fmt(d.fees, 2);
-      if (d.broker) next.broker = d.broker;
-      next.notes = "Lido do comprovante";
-      setFields((f) => ({ ...f, ...next }));
-      setFilled(new Set(data.filled as string[]));
-      setWarnings(data.warnings as string[]);
+      applyDraft(data as NormalizedTrade);
     } catch {
       setReadError("Não foi possível enviar o arquivo. Verifique a conexão e tente de novo.");
     } finally {
-      setReading(false);
+      setReading(false); setProgress(null);
     }
   }
 
@@ -95,12 +146,20 @@ export default function BuyTradeForm({
       <div className="ocr-drop">
         <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} hidden />
         <button type="button" className="btn" onClick={() => fileRef.current?.click()} disabled={reading}>
-          {reading ? "Lendo comprovante…" : "📷 Ler comprovante (foto, print ou PDF)"}
+          {reading ? (progress ?? "Lendo comprovante…") : "📷 Ler comprovante"}
         </button>
-        <span className="xsmall faint">Os campos são preenchidos para você revisar. Nada é registrado sem sua confirmação; o arquivo não é armazenado.</span>
+        <span className="xsmall faint">Foto, print ou PDF. Leitura gratuita feita no seu aparelho — a imagem não é enviada a ninguém. Os campos são preenchidos para você revisar; nada é registrado sem sua confirmação.</span>
       </div>
+      <details className="ocr-paste">
+        <summary className="small muted">Ou cole o texto da confirmação (e-mail, notificação)</summary>
+        <textarea rows={4} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="Ex.: Compra executada · NVDA · Quantidade 2,5 · Preço US$ 180,00 · 20/09/2026" />
+        <button type="button" className="btn btn-sm" onClick={onPaste} disabled={!pasted.trim()}>Preencher com o texto</button>
+      </details>
       {preview && <img src={preview} alt="Comprovante enviado" className="ocr-preview" />}
       {readError && <div className="banner banner-neg small">{readError}</div>}
+      {aiAvailable && lastFile && incomplete && !reading && (
+        <button type="button" className="btn btn-sm" onClick={onAi} style={{ alignSelf: "flex-start" }}>Tentar leitura com IA (usa a API configurada)</button>
+      )}
       {warnings.length > 0 && (
         <div className="banner banner-warn small">
           <strong>Revise antes de registrar:</strong>
