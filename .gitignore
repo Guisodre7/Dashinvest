@@ -8,3 +8,4 @@ next-env.d.ts
 .vercel
 coverage
 .dev-data.json
+dashinvest-vercel.env
