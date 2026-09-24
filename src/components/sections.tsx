@@ -36,8 +36,37 @@ export function WhereToInvest({ preview, analyses }: { preview: AllocationResult
     return <div className="banner banner-neg">{preview.blockReasons.join(" ")}</div>;
   }
   return (
-    <div className="table-wrap">
-      <table className="mobile-cards">
+    <>
+    <ul className="m-list only-mobile" aria-label="Onde aportar">
+      {preview.lines.map((l) => {
+        const a = byTicker.get(l.ticker)!;
+        const signal = a.signals.find((s) => s.kind !== "STALE_DATA");
+        return (
+          <li key={l.ticker}>
+            <Link href={assetHref(l.ticker)} className="m-row">
+              <div className="m-row-top">
+                <div className="m-id"><span className="ticker">{l.ticker}</span><span className="xsmall faint">{l.bucket}</span></div>
+                <div className="m-right">
+                  <span className={`badge ${l.priority === "ALTA" ? "badge-pos" : ""}`}>{l.priority}</span>
+                  <ScoreBadge score={l.opportunityScore} />
+                </div>
+              </div>
+              <div className="m-row-mid">
+                <WeightBar current={l.currentWeight} target={l.targetWeight} />
+                <span className={`num small ${l.gap < -1 ? "warn" : ""}`}>{pp(l.gap)}</span>
+              </div>
+              <div className="m-row-sub xsmall">
+                <span className="muted num">{n(l.currentWeight, 1)}% → alvo {n(l.targetWeight, 1)}% · {l.action.toLowerCase()} · confiança {l.confidence.toLowerCase()}</span>
+                {a.dataQuality.criticalStale && <span className="neg"> · cotação desatualizada</span>}
+              </div>
+              {signal && <div className={`m-row-sub xsmall ${signal.tone === "positive" ? "pos" : signal.tone === "negative" ? "neg" : "muted"}`}>{signal.title}</div>}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+    <div className="table-wrap only-desktop">
+      <table>
         <thead>
           <tr><th>Ativo</th><th>Prioridade</th><th className="num">Score</th><th>Peso atual → alvo</th><th className="num">Desvio</th><th>Sinais</th><th>Confiança</th></tr>
         </thead>
@@ -60,6 +89,7 @@ export function WhereToInvest({ preview, analyses }: { preview: AllocationResult
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -92,8 +122,45 @@ export function AlertsList({ alerts, extra }: { alerts: AlertRow[]; extra: { sev
 
 export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
   return (
-    <div className="table-wrap">
-      <table className="mobile-cards">
+    <>
+    <ul className="m-list only-mobile" aria-label="Carteira">
+      {portfolio.positions.map((p) => (
+        <li key={p.ticker}>
+          <Link href={assetHref(p.ticker)} className="m-row">
+            <div className="m-row-top">
+              <div className="m-id">
+                <span className="ticker">{p.ticker}</span>
+                <span className="xsmall faint">{p.isLegacy ? p.legacyLabel ?? "Legado" : p.bucket}</span>
+              </div>
+              <div className="m-right m-col">
+                <span className="num" style={{ fontWeight: 600 }}>{p.quantity ? usd(p.valueUsd) : "—"}</span>
+                {p.quantity > 0 && <span className={`num xsmall ${tone(p.pnlUsd)}`}>{p.pnlUsd !== null && p.pnlUsd >= 0 ? "+" : ""}{n(p.pnlUsd)} ({pct(p.assetReturn, 1, true)})</span>}
+              </div>
+            </div>
+            <div className="m-row-sub small">
+              <span className="muted">US$ </span><LivePrice ticker={p.ticker} fallback={p.price} /> <LiveChange ticker={p.ticker} />
+              {p.quantity > 0 && <span className="faint xsmall"> · {n(p.quantity, 4)} cotas</span>}
+            </div>
+            {p.isLegacy ? (
+              <div className="m-row-sub xsmall muted">{n(p.weightTotal, 1)}% do total · sem aportes</div>
+            ) : (
+              <div className="m-row-mid">
+                <WeightBar current={p.weightStrategic} target={p.targetWeight} />
+                <span className="num xsmall muted">{n(p.weightStrategic, 1)}% / {n(p.targetWeight, 1)}%</span>
+              </div>
+            )}
+            {p.quantity > 0 && (p.fxReturn !== null || p.dividendsUsd > 0) && (
+              <div className="m-row-sub xsmall muted">
+                câmbio <span className={tone(p.fxReturn)}>{pct(p.fxReturn, 1, true)}</span> · total BRL <span className={tone(p.totalReturnBrl)}>{pct(p.totalReturnBrl, 1, true)}</span>
+                {p.dividendsUsd > 0 && <> · proventos {usd(p.dividendsUsd)}</>}
+              </div>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+    <div className="table-wrap only-desktop">
+      <table>
         <thead>
           <tr>
             <th>Ativo</th><th className="num">Preço</th><th className="num">Dia</th><th className="num">Qtd.</th><th className="num">Preço médio</th>
@@ -130,6 +197,7 @@ export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

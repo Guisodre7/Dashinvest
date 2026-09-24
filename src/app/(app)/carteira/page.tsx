@@ -36,7 +36,25 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
 
       <section className="section">
         <div className="section-head"><h2>Posições</h2></div>
-        <div className="table-wrap">
+        {positions.length > 0 && (
+          <ul className="m-list only-mobile" aria-label="Posições">
+            {positions.map((p) => (
+              <li key={p.ticker} className="m-row">
+                <div className="m-row-top">
+                  <Link href={`/ativo/${p.ticker}`} className="m-id"><span className="ticker">{p.ticker}</span><span className="xsmall faint">{p.broker ?? "corretora não informada"}</span></Link>
+                  <ActionForm action={deletePosition} submitLabel="Remover" submitClassName="btn btn-sm" className="row" confirm={`Remover o registro de ${p.ticker}? (não vende nada)`}>
+                    <input type="hidden" name="ticker" value={p.ticker} />
+                  </ActionForm>
+                </div>
+                <div className="m-row-sub small num">
+                  {n(p.quantity, 6)} cotas · PM {usd(p.avg_price, 2)} · câmbio {p.avg_fx_rate ? n(p.avg_fx_rate, 4) : <span className="faint">não informado</span>}
+                </div>
+                <div className="m-row-sub xsmall faint">{dateBr(p.purchase_date)} · taxas {n(p.fees)} {p.currency}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className={`table-wrap${positions.length ? " only-desktop" : ""}`}>
           <table>
             <thead><tr><th>Ativo</th><th className="num">Quantidade</th><th className="num">Preço médio</th><th className="num">Câmbio médio</th><th>Data</th><th>Corretora</th><th className="num">Taxas</th><th>Moeda</th><th /></tr></thead>
             <tbody>
@@ -51,7 +69,7 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
                   <td className="num">{n(p.fees)}</td>
                   <td>{p.currency}</td>
                   <td>
-                    <ActionForm action={deletePosition} submitLabel="Remover" className="row" confirm={`Remover o registro de ${p.ticker}? (não vende nada)`}>
+                    <ActionForm action={deletePosition} submitLabel="Remover" submitClassName="btn btn-sm" className="row" confirm={`Remover o registro de ${p.ticker}? (não vende nada)`}>
                       <input type="hidden" name="ticker" value={p.ticker} />
                     </ActionForm>
                   </td>

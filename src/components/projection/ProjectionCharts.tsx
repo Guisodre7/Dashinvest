@@ -60,7 +60,7 @@ export function MonthlyLinesChart({ lines, initial, height = 320 }: { lines: Lin
           </span>
         ))}
       </div>
-      <div ref={ref} style={{ width: "100%", height }} />
+      <div ref={ref} className="mchart" style={{ width: "100%", height }} />
     </div>
   );
 }

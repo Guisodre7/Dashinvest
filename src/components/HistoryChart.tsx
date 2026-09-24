@@ -32,7 +32,7 @@ export default function HistoryChart({ points }: { points: { t: string; usd: num
   return (
     <div>
       <div className="row-wrap xsmall muted"><span>— Patrimônio (US$)</span><span className="faint">- - Custo acumulado (aportes)</span></div>
-      <div ref={ref} style={{ width: "100%", height: 260 }} />
+      <div ref={ref} className="mchart" style={{ width: "100%", height: 260 }} />
     </div>
   );
 }

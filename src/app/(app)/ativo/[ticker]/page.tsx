@@ -58,7 +58,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
             {q && <span className="faint">Cotação de {dateTimeEt(q.meta.timestamp)} · {MARKET_STATUS_LABEL[q.meta.market_status]} · {q.session === "EXTENDED" ? "sessão estendida" : "sessão regular"}</span>}
           </div>
         </div>
-        <div className="grid grid-2">
+        <div className="grid grid-2 keep-2">
           <Kpi label="Opportunity Score" value={<ScoreBadge score={a.opportunity.score} />} sub={`cobertura ${n(a.opportunity.coverage * 100, 0)}% dos fatores`} />
           <Kpi label="Confiança da análise" value={a.confidence.level} sub={`Data quality ${n(a.dataQuality.score, 0)}%`} />
         </div>

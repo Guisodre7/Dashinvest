@@ -93,7 +93,7 @@ export default function ProjectionClient({
           </div>
           <span className="xsmall faint">{pending ? "Recalculando no servidor…" : `Calculado às ${new Date(bundle.computedAt).toLocaleTimeString("pt-BR")}`}</span>
         </div>
-        <div className="grid grid-3" style={{ marginTop: 14 }}>
+        <div className="grid grid-3 proj-scenarios" style={{ marginTop: 14 }}>
           {SCENARIO_KEYS.map((k) => (
             <div key={k} className="card">
               <div className="kpi-label">{SC[k].emoji} {SC[k].label}</div>

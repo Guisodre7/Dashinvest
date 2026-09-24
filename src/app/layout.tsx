@@ -10,11 +10,14 @@ export const metadata: Metadata = {
     googleBot: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
   },
   referrer: "no-referrer",
+  appleWebApp: { capable: true, title: "Carteira", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f6f6f3" },
     { media: "(prefers-color-scheme: dark)", color: "#0f1113" },
