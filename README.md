@@ -63,7 +63,8 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 
 - `loading.tsx` mostra um esqueleto imediatamente ao trocar de aba.
 - Cache do roteador (`staleTimes.dynamic = 30s`): páginas visitadas reabrem na hora. Os preços continuam ao vivo via polling.
-- Análise da carteira reutilizada por 20 s em memória por usuário (`loadContext`), invalidada em qualquer alteração de dados. O cálculo do aporte sempre usa dados novos.
+- Abrir ou recarregar o app sempre traz análise atual (no máximo 30 s). Só a troca de aba reaproveita a análise anterior em memória (até 10 min, com selo "atualizando…" e recarga automática). Qualquer gravação muda um cookie de versão dos dados, então nenhuma instância mostra posições anteriores a uma compra. O cálculo do aporte sempre usa dados novos.
+- Patrimônio, L/P, retornos e pesos do painel são recalculados no navegador a cada cotação nova (`LivePortfolio.tsx`).
 - Cotações com 5 s de cache compartilhado; cada cotação mantém o timestamp do fornecedor, e a idade exibida é real.
 
 ## Configuração
