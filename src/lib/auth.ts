@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { serverConfig } from "./config";
 import { isLocalDevMode } from "./devmode";
 import { allowedEmails } from "./runtime-env";
@@ -18,7 +19,8 @@ export const DEV_USER: SessionUser = { id: "00000000-0000-0000-0000-000000000001
  *  - allowlist de e-mails (ALLOWED_EMAIL, um ou vários separados por vírgula);
  *  - MFA obrigatório (aal2) quando REQUIRE_MFA != "false".
  */
-export async function getSessionUser(): Promise<{ user: SessionUser | null; reason?: "unauthenticated" | "forbidden" | "mfa" }> {
+// Layout, página e ações do mesmo request compartilham uma única verificação.
+export const getSessionUser = cache(async (): Promise<{ user: SessionUser | null; reason?: "unauthenticated" | "forbidden" | "mfa" }> => {
   if (isLocalDevMode()) return { user: DEV_USER };
   if (!serverConfig.supabaseUrl || !serverConfig.supabaseAnonKey) return { user: null, reason: "unauthenticated" };
 
@@ -34,7 +36,7 @@ export async function getSessionUser(): Promise<{ user: SessionUser | null; reas
   const user = { id: claims.sub, email, aal };
   if (serverConfig.requireMfa && aal !== "aal2") return { user, reason: "mfa" };
   return { user };
-}
+});
 
 /** Para páginas e server actions: redireciona se não autorizado. */
 export async function requireUser(): Promise<SessionUser> {

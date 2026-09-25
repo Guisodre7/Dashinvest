@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
 type IconName = "home" | "wallet" | "sliders" | "trend" | "doc";
@@ -20,7 +20,7 @@ export default function NavLinks() {
   return (
     <nav className="nav" aria-label="Seções">
       {LINKS.map((l) => (
-        <Link key={l.href} href={l.href} aria-current={isActive(path, l.href) ? "page" : undefined}>{l.label}</Link>
+        <Link key={l.href} href={l.href} aria-current={isActive(path, l.href) ? "page" : undefined}><Pending>{l.label}</Pending></Link>
       ))}
     </nav>
   );
@@ -33,8 +33,7 @@ export function MobileTabBar() {
     <nav className="tabbar" aria-label="Seções">
       {LINKS.map((l) => (
         <Link key={l.href} href={l.href} aria-current={isActive(path, l.href) ? "page" : undefined}>
-          <Icon name={l.icon} />
-          <span>{l.short}</span>
+          <Pending><Icon name={l.icon} /><span>{l.short}</span></Pending>
         </Link>
       ))}
     </nav>
@@ -55,4 +54,10 @@ function Icon({ name }: { name: IconName }) {
     case "doc":
       return <svg {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h4" /></svg>;
   }
+}
+
+/** Feedback imediato no toque: o item fica destacado enquanto a página abre. */
+function Pending({ children }: { children: React.ReactNode }) {
+  const { pending } = useLinkStatus();
+  return <span className={`navitem${pending ? " is-pending" : ""}`}>{children}</span>;
 }

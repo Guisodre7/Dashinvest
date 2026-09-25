@@ -1,11 +1,12 @@
 "use client";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import type { BuyState, BuyUndo } from "@/app/(app)/carteira/actions";
 import { normalizeTrade, type NormalizedTrade, type TradeDraft } from "@/lib/ocr/normalize";
 import { parseTradeText } from "@/lib/ocr/parseText";
 
-type State = { ok: boolean; message: string | null };
-type Fields = { ticker: string; quantity: string; price: string; fx_rate: string; trade_date: string; fees: string; broker: string; notes: string };
-const EMPTY: Fields = { ticker: "", quantity: "", price: "", fx_rate: "", trade_date: "", fees: "", broker: "", notes: "" };
+type State = BuyState;
+type Fields = { ticker: string; quantity: string; price: string; fx_rate: string; trade_date: string; fees: string; broker: string; notes: string; trade_id: string };
+const EMPTY: Fields = { ticker: "", quantity: "", price: "", fx_rate: "", trade_date: "", fees: "", broker: "", notes: "", trade_id: "" };
 
 /** Reduz fotos grandes (e converte HEIC quando o navegador consegue decodificar) para JPEG ≤ 2000px. */
 async function compressImage(file: File): Promise<Blob> {
@@ -24,14 +25,17 @@ async function compressImage(file: File): Promise<Blob> {
 const fmt = (v: number | null, digits = 6) => (v === null ? "" : String(Number(v.toFixed(digits))));
 
 export default function BuyTradeForm({
-  action, tickers, aiAvailable = false,
+  action, undoAction, tickers, aiAvailable = false, defaultBroker = null,
 }: {
   action: (s: State, fd: FormData) => Promise<State>;
+  undoAction: (u: BuyUndo) => Promise<{ ok: boolean; message: string | null }>;
   tickers: string[];
+  /** Corretora usada nas compras anteriores (o print não mostra o nome). */
+  defaultBroker?: string | null;
   /** Leitura com IA (paga) disponível no servidor — opcional, só como segunda tentativa. */
   aiAvailable?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, { ok: true, message: null });
+  const [state, formAction, pending] = useActionState(action, { ok: true, message: null, undo: null });
   const [fields, setFields] = useState<Fields>({ ...EMPTY, ticker: tickers[0] ?? "" });
   const [filled, setFilled] = useState<Set<string>>(new Set());
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -44,6 +48,18 @@ export default function BuyTradeForm({
   const [incomplete, setIncomplete] = useState(false);
   const [pasted, setPasted] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [autoSubmit, setAutoSubmit] = useState(false);
+  const [autoSummary, setAutoSummary] = useState<string | null>(null);
+  const [undoMsg, setUndoMsg] = useState<string | null>(null);
+  const [undoPending, startUndo] = useTransition();
+
+  // Leitura completa e conferida → registra sozinho (o usuário pode desfazer).
+  useEffect(() => {
+    if (!autoSubmit) return;
+    setAutoSubmit(false);
+    formRef.current?.requestSubmit();
+  }, [autoSubmit, fields]);
 
   // Após registrar com sucesso, limpa o formulário.
   useEffect(() => {
@@ -72,16 +88,36 @@ export default function BuyTradeForm({
     if (d.trade_date) next.trade_date = d.trade_date;
     if (d.fees !== null) next.fees = fmt(d.fees, 2);
     if (d.broker) next.broker = d.broker;
+    if (!d.broker && defaultBroker) next.broker = defaultBroker;
+    if (d.trade_id) next.trade_id = d.trade_id;
     if (n.filled.length) next.notes = "Lido do comprovante";
     // Cada leitura parte do formulário limpo — nunca mistura valores de leituras anteriores.
     setFields({ ...EMPTY, ticker: tickers[0] ?? "", ...next });
     setFilled(new Set(n.filled));
     setWarnings([...extraWarnings, ...n.warnings]);
     setIncomplete(!d.ticker || d.quantity === null || d.price === null);
+    setUndoMsg(null);
+    if (n.verified && extraWarnings.length === 0) {
+      const brl = (v: number | null, dg = 2) => (v === null ? "—" : v.toLocaleString("pt-BR", { minimumFractionDigits: dg, maximumFractionDigits: 8 }));
+      setAutoSummary(`${brl(d.quantity, 0)} ${d.ticker} a US$ ${brl(d.price)} · taxa US$ ${brl(d.fees ?? 0)} · ${d.trade_date?.split("-").reverse().join("/")}${d.trade_id ? ` · comprovante #${d.trade_id}` : ""}`);
+      setAutoSubmit(true);
+    } else {
+      setAutoSummary(null);
+    }
   }
 
   function resetRead() {
-    setReadError(null); setWarnings([]); setIncomplete(false);
+    setReadError(null); setWarnings([]); setIncomplete(false); setAutoSummary(null); setUndoMsg(null);
+  }
+
+  function undo() {
+    if (!state.undo) return;
+    const u = state.undo;
+    startUndo(async () => {
+      const r = await undoAction(u);
+      setUndoMsg(r.message);
+      setAutoSummary(null);
+    });
   }
 
   /** Leitura gratuita, no próprio aparelho: OCR local (imagem/PDF escaneado) ou texto do PDF. */
@@ -148,7 +184,7 @@ export default function BuyTradeForm({
         <button type="button" className="btn" onClick={() => fileRef.current?.click()} disabled={reading}>
           {reading ? (progress ?? "Lendo comprovante…") : "📷 Ler comprovante"}
         </button>
-        <span className="xsmall faint">Foto, print ou PDF. Leitura gratuita feita no seu aparelho — a imagem não é enviada a ninguém. Os campos são preenchidos para você revisar; nada é registrado sem sua confirmação.</span>
+        <span className="xsmall faint">Envie o print do resumo da transação. Leitura gratuita, feita no seu aparelho (a imagem não é enviada a ninguém). Se tudo for lido e os valores baterem, a compra entra sozinha na carteira, com opção de desfazer; se faltar algo, os campos ficam para você revisar.</span>
       </div>
       <details className="ocr-paste">
         <summary className="small muted">Ou cole o texto da confirmação (e-mail, notificação)</summary>
@@ -166,7 +202,15 @@ export default function BuyTradeForm({
           <ul className="clean">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
         </div>
       )}
-      <form action={formAction} className="form-grid">
+      {state.ok && state.message && state.undo && !undoMsg && (
+        <div className="banner small ocr-done">
+          <div>✅ <strong>{autoSummary ? "Compra registrada automaticamente" : "Compra registrada"}</strong>{autoSummary && <> — {autoSummary}</>}. Carteira atualizada.</div>
+          <button type="button" className="btn btn-sm" onClick={undo} disabled={undoPending}>{undoPending ? "Desfazendo…" : "Desfazer"}</button>
+        </div>
+      )}
+      {undoMsg && <div className="banner small">{undoMsg}</div>}
+      <form ref={formRef} action={formAction} className="form-grid">
+        <input type="hidden" name="trade_id" value={fields.trade_id} />
         <label>Ticker
           <select name="ticker" required value={fields.ticker} onChange={set("ticker")} className={cls("ticker")}>
             {tickerOptions.map((t) => <option key={t} value={t}>{t}{t === extraTicker ? " (não cadastrado)" : ""}</option>)}
@@ -181,7 +225,7 @@ export default function BuyTradeForm({
         <label>Observação<input name="notes" value={fields.notes} onChange={set("notes")} /></label>
         <div className="row">
           <button className="btn btn-primary btn-sm" disabled={pending || reading}>{pending ? "Salvando…" : filled.size ? "Confirmar e registrar compra" : "Registrar compra"}</button>
-          {state.message && <span className={`small ${state.ok ? "pos" : "neg"}`}>{state.message}</span>}
+          {state.message && !(state.ok && state.undo) && <span className={`small ${state.ok ? "pos" : "neg"}`}>{state.message}</span>}
         </div>
       </form>
     </div>

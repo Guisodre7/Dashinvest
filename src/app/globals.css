@@ -380,3 +380,13 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 .ocr-paste[open] { gap: 8px; }
 .ocr-paste summary { cursor: pointer; }
 .ocr-paste textarea { width: 100%; resize: vertical; margin: 6px 0; }
+.ocr-done { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--pos-soft); border-color: color-mix(in srgb, var(--pos) 30%, transparent); }
+.stale-badge { margin-top: 6px; background: var(--accent-soft); color: var(--accent); }
+
+/* Navegação: destaque imediato do item tocado enquanto a página carrega */
+.navitem { display: contents; }
+.tabbar .navitem { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.navitem.is-pending { color: var(--accent); animation: nav-pulse 0.9s ease-in-out infinite; }
+.nav a:has(.is-pending) { background: var(--accent-soft); color: var(--accent); }
+@keyframes nav-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .navitem.is-pending { animation: none; } }

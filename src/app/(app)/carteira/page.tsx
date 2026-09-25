@@ -6,7 +6,7 @@ import HistoryChart from "@/components/HistoryChart";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, tone, usd } from "@/lib/format";
-import { deletePosition, registerBuy, registerDividend, savePosition, setOpportunityCash } from "./actions";
+import { deletePosition, registerBuy, registerDividend, savePosition, setOpportunityCash, undoBuy } from "./actions";
 
 const RANGES = [
   { key: "1S", days: 7 }, { key: "1M", days: 30 }, { key: "3M", days: 90 },
@@ -35,6 +35,29 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
   return (
     <div className="stack" style={{ gap: 0 }}>
       <section className="hero"><div><h1>Carteira</h1><p className="muted small">Cadastro de posições, compras e proventos. Nenhuma ordem é enviada a corretoras e nenhuma credencial é armazenada.</p></div></section>
+
+
+      <section className="section grid grid-2">
+        <div className="card">
+          <h3>Registrar compra (aporte)</h3>
+          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos automaticamente.</p>
+          <BuyTradeForm action={registerBuy} undoAction={undoBuy} tickers={tickers} aiAvailable={!!serverConfig.anthropicApiKey} defaultBroker={transactions.find((t) => t.broker)?.broker ?? positions.find((p) => p.broker)?.broker ?? null} />
+        </div>
+        <div className="card">
+          <h3>Cadastrar / corrigir posição</h3>
+          <p className="xsmall faint" style={{ marginBottom: 8 }}>Substitui a posição do ativo. Use para importar a carteira atual. O câmbio médio (R$/US$) permite separar retorno cambial.</p>
+          <ActionForm action={savePosition} submitLabel="Salvar posição">
+            <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
+            <label>Quantidade<input name="quantity" inputMode="decimal" required /></label>
+            <label>Preço médio (US$)<input name="avg_price" inputMode="decimal" required /></label>
+            <label>Câmbio médio (R$/US$)<input name="avg_fx_rate" inputMode="decimal" /></label>
+            <label>Data da compra<input name="purchase_date" type="date" /></label>
+            <label>Corretora<input name="broker" /></label>
+            <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
+            <label>Moeda<select name="currency" defaultValue="USD"><option>USD</option></select></label>
+          </ActionForm>
+        </div>
+      </section>
 
       <section className="section">
         <div className="section-head"><h2>Posições</h2></div>
@@ -79,28 +102,6 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
               )) : <tr><td colSpan={9} className="empty">Nenhuma posição cadastrada.</td></tr>}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section className="section grid grid-2">
-        <div className="card">
-          <h3>Registrar compra (aporte)</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos automaticamente.</p>
-          <BuyTradeForm action={registerBuy} tickers={tickers} aiAvailable={!!serverConfig.anthropicApiKey} />
-        </div>
-        <div className="card">
-          <h3>Cadastrar / corrigir posição</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Substitui a posição do ativo. Use para importar a carteira atual. O câmbio médio (R$/US$) permite separar retorno cambial.</p>
-          <ActionForm action={savePosition} submitLabel="Salvar posição">
-            <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
-            <label>Quantidade<input name="quantity" inputMode="decimal" required /></label>
-            <label>Preço médio (US$)<input name="avg_price" inputMode="decimal" required /></label>
-            <label>Câmbio médio (R$/US$)<input name="avg_fx_rate" inputMode="decimal" /></label>
-            <label>Data da compra<input name="purchase_date" type="date" /></label>
-            <label>Corretora<input name="broker" /></label>
-            <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
-            <label>Moeda<select name="currency" defaultValue="USD"><option>USD</option></select></label>
-          </ActionForm>
         </div>
       </section>
 

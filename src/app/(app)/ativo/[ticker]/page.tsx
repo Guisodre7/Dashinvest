@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { LiveChange, LiveFreshness, LivePrice, LiveQuotesProvider } from "@/components/LiveQuotes";
 import PriceChart from "@/components/PriceChart";
+import StaleRefresher from "@/components/StaleRefresher";
 import { Kpi, ScoreBadge } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
@@ -55,6 +56,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           </div>
           <div className="row-wrap small" style={{ marginTop: 6 }}>
             <LiveFreshness ticker={ticker} />
+            <StaleRefresher computedAt={ctx.loadedAt} />
             {q && <span className="faint">Cotação de {dateTimeEt(q.meta.timestamp)} · {MARKET_STATUS_LABEL[q.meta.market_status]} · {q.session === "EXTENDED" ? "sessão estendida" : "sessão regular"}</span>}
           </div>
         </div>

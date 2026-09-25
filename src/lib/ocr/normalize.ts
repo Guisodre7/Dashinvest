@@ -18,6 +18,8 @@ export interface RawTrade {
   trade_date: string | null;
   broker: string | null;
   fx_rate: number | null;
+  /** Identificador da ordem/transação na corretora (evita registrar duas vezes). */
+  trade_id?: string | null;
   notes: string | null;
 }
 
@@ -33,6 +35,7 @@ export interface TradeDraft {
   total_amount: number | null;
   currency: string | null;
   company_name: string | null;
+  trade_id: string | null;
 }
 
 export interface NormalizedTrade {
@@ -41,6 +44,12 @@ export interface NormalizedTrade {
   warnings: string[];
   /** Campos preenchidos a partir do comprovante. */
   filled: (keyof TradeDraft)[];
+  /**
+   * Leitura completa E conferida: compra, ativo cadastrado, quantidade, preço e data
+   * presentes, e quantidade × preço bate com o valor do comprovante. Só assim o
+   * registro pode ser automático.
+   */
+  verified: boolean;
 }
 
 const pos = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
@@ -62,6 +71,7 @@ export function normalizeTrade(raw: RawTrade, knownTickers: string[], today = ne
       draft: emptyDraft(),
       warnings: ["A imagem não parece ser um comprovante de compra/venda de ativo. Envie a tela de confirmação da ordem ou a nota da corretora."],
       filled: [],
+      verified: false,
     };
   }
 
@@ -79,9 +89,11 @@ export function normalizeTrade(raw: RawTrade, knownTickers: string[], today = ne
   if (quantity && !price && gross) { price = gross / quantity; warnings.push("Preço por cota calculado a partir do valor bruto ÷ quantidade."); }
   if (!quantity && price && gross) { quantity = gross / price; warnings.push("Quantidade calculada a partir do valor bruto ÷ preço — confira as frações."); }
 
+  let amountChecked = false;
   if (quantity && price) {
     const ref = gross ?? (total !== null && fees !== null ? total - fees : null);
-    if (ref && Math.abs(quantity * price - ref) / ref > 0.015) {
+    if (ref) amountChecked = Math.abs(quantity * price - ref) / ref <= 0.015;
+    if (ref && !amountChecked) {
       warnings.push(`Quantidade × preço (${(quantity * price).toFixed(2)}) difere do valor do comprovante (${ref.toFixed(2)}). Confira os números.`);
     }
   }
@@ -110,12 +122,15 @@ export function normalizeTrade(raw: RawTrade, knownTickers: string[], today = ne
     ticker, quantity, price, fees, fx_rate, trade_date,
     broker: raw.broker?.trim() || null, side: raw.side, total_amount: total, currency,
     company_name: raw.company_name?.trim() || null,
+    trade_id: raw.trade_id ?? null,
   };
   const filled = (["ticker", "quantity", "price", "fees", "fx_rate", "trade_date", "broker"] as const).filter((k) => draft[k] !== null);
   if (!ticker || !quantity || !price) warnings.unshift("Leitura incompleta: preencha os campos que ficaram vazios.");
-  return { ok: filled.length > 0, draft, warnings, filled: [...filled] };
+  const verified = warnings.length === 0 && raw.side === "buy" && !!ticker && knownTickers.includes(ticker)
+    && !!quantity && !!price && !!trade_date && amountChecked;
+  return { ok: filled.length > 0, draft, warnings, filled: [...filled], verified };
 }
 
 function emptyDraft(): TradeDraft {
-  return { ticker: null, quantity: null, price: null, fees: null, fx_rate: null, trade_date: null, broker: null, side: "unknown", total_amount: null, currency: null, company_name: null };
+  return { ticker: null, quantity: null, price: null, fees: null, fx_rate: null, trade_date: null, broker: null, side: "unknown", total_amount: null, currency: null, company_name: null, trade_id: null };
 }

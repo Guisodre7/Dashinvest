@@ -19,7 +19,7 @@ const QuotesContext = createContext<Ctx | null>(null);
 
 /**
  * Atualização "realtime" por polling server-side (as API keys ficam no backend).
- * Intervalo: 10s com mercado aberto, 60s fora do pregão.
+ * Intervalo: 15s com mercado aberto, 60s fora do pregão (pausado com a aba oculta).
  */
 export function LiveQuotesProvider({ initial, cfg, children }: { initial: Record<string, Quote | null>; cfg: FreshnessCfg; children: React.ReactNode }) {
   const [quotes, setQuotes] = useState(initial);
@@ -57,11 +57,12 @@ export function LiveQuotesProvider({ initial, cfg, children }: { initial: Record
       } finally {
         if (!cancelled) {
           const open = getMarketStatus() === "OPEN";
-          timer = setTimeout(poll, document.hidden ? 60_000 : open ? 10_000 : 60_000);
+          timer = setTimeout(poll, document.hidden ? 120_000 : open ? 15_000 : 60_000);
         }
       }
     }
-    timer = setTimeout(poll, 10_000);
+    // Primeira atualização imediata: a página pode ter vindo do cache de navegação.
+    timer = setTimeout(poll, 300);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [tickers]);
 

@@ -35,11 +35,12 @@ const MONEY_PREFIX = String.raw`(?:US\$|U\$|USD|\$|R\$)?\s*`;
 
 function findNumberAfter(text: string, labels: string[], maxGap = 25): number | null {
   for (const label of labels) {
-    const re = new RegExp(`${label}[^\\d\\n-]{0,${maxGap}}${MONEY_PREFIX}${NUM}`, "i");
+    // Valor na mesma linha ou logo no início da linha seguinte ("Valor total\n- US$ 100,00").
+    const re = new RegExp(`${label}[^\\d\\n-]{0,${maxGap}}(?:\\n\\s*)?[-−–]?\\s*${MONEY_PREFIX}${NUM}`, "i");
     const m = text.match(re);
     if (m) {
       const v = parseAmount(m[1]);
-      if (v !== null) return v;
+      if (v !== null) return Math.abs(v); // débitos aparecem com sinal negativo
     }
   }
   return null;
@@ -105,12 +106,22 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
 
   // Quantidade e preço — rótulos pt/en e o formato "10 BRK B @ 480.25".
   // "shares/cotas" vêm DEPOIS do número — tratados abaixo.
-  let quantity = findNumberAfter(clean, ["quantidade", "qtd\\.?", "qtde\\.?", "quantity", "qty\\.?", "n[ºo°]\\s*de\\s*(?:cotas|ações|acoes)"]);
+  let quantity = findNumberAfter(clean, ["quantidade executada", "quantidade", "qtd\\.?", "qtde\\.?", "quantity", "qty\\.?", "n[ºo°]\\s*de\\s*(?:cotas|ações|acoes)"], 4);
   let price = findNumberAfter(clean, ["preço médio", "preco medio", "preço de execução", "preço unitário", "preço", "preco", "avg\\.? price", "average price", "execution price", "fill price", "price"]);
   const at = upper.match(new RegExp(String.raw`(?:BOUGHT|SOLD|BUY|SELL|COMPRA|VENDA)?\s*${NUM}\s*(?:SHARES?\s*(?:OF\s*)?)?[A-Z]{1,5}(?:[\s./-][A-Z])?\s*@\s*${MONEY_PREFIX}${NUM}`));
   if (at) {
     quantity ??= parseAmount(at[1]);
     price ??= parseAmount(at[2]);
+  }
+  // Resumo da transação: "Compra de 0.13979299 quantidade de VOO a $708.19" (OCR às vezes junta "Comprade").
+  const summary = clean.match(new RegExp(String.raw`(compra|venda)\s*de\s*${NUM}\s*(?:quantidades?|cotas?|ações|acoes|shares?)?\s*(?:de|do|of)?\s*([A-Z]{1,5}(?:[.\s/-][A-Z])?)\s*(?:a|at|@|por)\s*${MONEY_PREFIX}${NUM}`, "i"));
+  if (summary) {
+    quantity ??= parseAmount(summary[2]);
+    price ??= parseAmount(summary[4]);
+    if (!ticker) {
+      const t = summary[3].toUpperCase().replace(/[\s/-]/g, ".");
+      ticker = knownTickers.includes(t) ? t : summary[3].toUpperCase();
+    }
   }
   // "0.8734 shares at $57.12" · "3 cotas a US$ 54,10"
   const sharesAt = clean.match(new RegExp(`${NUM}\\s*(?:shares?|cotas?|ações|acoes|units?)(?:\\s+(?:de|of|do)\\s+[A-Za-z]{1,6}(?:[.\\s/-][A-Za-z])?)?\\s*(?:at|a|@|por)\\s*${MONEY_PREFIX}${NUM}`, "i"));
@@ -123,10 +134,10 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
     if (m) quantity = parseAmount(m[1]);
   }
 
-  const gross = findNumberAfter(clean, ["valor bruto", "gross amount", "principal", "subtotal", "valor da operação"]);
+  const gross = findNumberAfter(clean, ["valor bruto", "gross amount", "principal", "subtotal", "valor da operação", "valor(?!\\s*(?:total|l[ií]quido|bruto))"], 12);
   const total = findNumberAfter(clean, ["valor total", "total debitado", "net amount", "valor líquido", "valor liquido", "total"]);
   // "Taxa de câmbio" não é taxa da operação.
-  let fees = findNumberAfter(clean, ["taxas?(?!\\s*d[eo]\\s*c[âa]mbio)", "corretagem", "emolumentos", "commission", "fees?"]);
+  let fees = findNumberAfter(clean, ["tarifas e corretagem", "taxa de corretagem", "taxas?(?!\\s*d[eo]\\s*c[âa]mbio)", "corretagem", "emolumentos", "commission", "fees?"]);
   if (fees === null && /\b(sem taxa|zero fee|no commission|commission[- ]free|isento de taxa|taxa zero)/i.test(clean)) fees = 0;
 
   const fx = findNumberAfter(clean, ["taxa de câmbio", "taxa de cambio", "câmbio", "cambio", "cotação do dólar", "exchange rate", "vet"], 20);
@@ -134,6 +145,9 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
   const currency = /US\$|U\$|\bUSD\b|\$\s*\d/.test(clean) ? "USD" : /R\$|\bBRL\b/.test(clean) ? "BRL" : null;
   const trade_date = findDate(clean, portuguese, notes);
   const broker = BROKERS.find((b) => new RegExp(`\\b${b}\\b`, "i").test(clean)) ?? null;
+
+  const idMatch = clean.match(/(?:n[úu]mero da transa[çc][ãa]o|id da ordem|order id|transaction id|n[ºo°] da ordem)\s*[:#-]?\s*\n?\s*([A-Z0-9]{6,20})\b/i);
+  const trade_id = idMatch ? idMatch[1].toUpperCase() : null;
 
   const found = [ticker, quantity, price, total, gross].filter((x) => x !== null).length;
   return {
@@ -150,6 +164,7 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
     trade_date,
     broker: broker === "IBKR" ? "Interactive Brokers" : broker,
     fx_rate: fx,
+    trade_id,
     notes: notes.length ? notes.join(" ") : null,
   };
 }

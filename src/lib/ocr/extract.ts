@@ -26,6 +26,7 @@ const TradeSchema = z.object({
   trade_date: z.string().nullable().describe("Data de execução no formato YYYY-MM-DD"),
   broker: z.string().nullable().describe("Nome da corretora, se identificável"),
   fx_rate: z.number().nullable().describe("Câmbio R$ por US$1 somente se aparecer explicitamente no documento"),
+  trade_id: z.string().nullable().describe("Número/ID da ordem ou transação, se exibido"),
   notes: z.string().nullable().describe("Ambiguidades relevantes (texto cortado, valores ilegíveis, múltiplas ordens); null se nada a observar"),
 });
 

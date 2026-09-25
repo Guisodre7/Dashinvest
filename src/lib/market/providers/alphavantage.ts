@@ -1,6 +1,6 @@
 import "server-only";
 import { buildMeta } from "../freshness";
-import { getJson, toNum } from "../http";
+import { blockEndpoint, getJson, toNum } from "../http";
 import { statusAt } from "../marketStatus";
 import type { Capability, EtfProfile, FxRate, MarketDataProvider } from "../provider";
 import {
@@ -39,7 +39,13 @@ export class AlphaVantageProvider implements MarketDataProvider {
     if (fn === "GLOBAL_QUOTE" && this.realtime) q.set("entitlement", "realtime");
     const body = await getJson<T>(NAME, fn, `${BASE}?${q.toString()}`, { revalidate, ticker });
     const problem = body["Error Message"] ?? body.Note ?? body.Information;
-    if (problem) throw new ProviderUnavailableError(NAME, fn, String(problem).slice(0, 160));
+    if (problem) {
+      const text = String(problem);
+      // Limite diário/por minuto → pausa o fornecedor; função premium → pausa só a função.
+      if (/rate limit|requests per|per day|frequency/i.test(text)) blockEndpoint(`${NAME}|*`, 429, 30 * 60_000);
+      else if (/premium/i.test(text)) blockEndpoint(`${NAME}|${fn}`, 403, 12 * 3600_000);
+      throw new ProviderUnavailableError(NAME, fn, text.slice(0, 160));
+    }
     return body;
   }
 

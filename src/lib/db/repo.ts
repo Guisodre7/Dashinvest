@@ -90,7 +90,9 @@ export interface Repo {
   upsertPosition(p: PositionRow): Promise<void>;
   deletePosition(ticker: string): Promise<void>;
   getTransactions(limit?: number): Promise<TransactionRow[]>;
-  addTransaction(t: TransactionRow): Promise<void>;
+  /** Retorna o id da transação criada. */
+  addTransaction(t: TransactionRow): Promise<string | null>;
+  deleteTransaction(id: string): Promise<void>;
   getDividends(): Promise<DividendRow[]>;
   addDividend(d: DividendRow & { amount_per_share: number | null; quantity: number | null }): Promise<void>;
   getSetting<T>(key: string): Promise<T | null>;
@@ -203,7 +205,13 @@ class SupabaseRepo implements Repo {
   }
 
   async addTransaction(t: TransactionRow) {
-    this.check(await this.db.from("transactions").insert({ ...t, user_id: this.userId } as never));
+    const { id: _id, ...row } = t;
+    const rows = this.check(await this.db.from("transactions").insert({ ...row, user_id: this.userId } as never).select("id")) as { id: string }[] | null;
+    return rows?.[0]?.id ?? null;
+  }
+
+  async deleteTransaction(id: string) {
+    this.check(await this.db.from("transactions").delete().eq("user_id", this.userId).eq("id", id));
   }
 
   async getDividends() {
@@ -307,7 +315,7 @@ class SupabaseRepo implements Repo {
   }
 
   async getAlerts(limit = 30) {
-    const rows = this.check(await this.db.from("alerts").select("*").order("created_at", { ascending: false }).limit(limit));
+    const rows = this.check(await this.db.from("alerts").select("*").or(`user_id.is.null,user_id.eq.${this.userId}`).order("created_at", { ascending: false }).limit(limit));
     return (rows ?? []) as AlertRow[];
   }
 
@@ -465,7 +473,12 @@ class LocalRepo implements Repo {
   async upsertPosition(p: PositionRow) { await this.mutate((d) => { d.positions = [...d.positions.filter((x) => x.ticker !== p.ticker), p]; }); }
   async deletePosition(ticker: string) { await this.mutate((d) => { d.positions = d.positions.filter((x) => x.ticker !== ticker); }); }
   async getTransactions(limit = 100) { return (await this.load()).transactions.slice(0, limit); }
-  async addTransaction(t: TransactionRow) { await this.mutate((d) => { d.transactions.unshift(t); }); }
+  async addTransaction(t: TransactionRow) {
+    const id = `local-tx-${Date.now()}`;
+    await this.mutate((d) => { d.transactions.unshift({ ...t, id }); });
+    return id;
+  }
+  async deleteTransaction(id: string) { await this.mutate((d) => { d.transactions = d.transactions.filter((x) => x.id !== id); }); }
   async getDividends() { return (await this.load()).dividends.map((x) => ({ ...x, net_amount: x.gross_amount - x.withholding_tax })); }
   async addDividend(x: DividendRow) { await this.mutate((d) => { d.dividends.unshift(x); }); }
   async getSetting<T>(key: string) { return ((await this.load()).settings[key] as T) ?? null; }

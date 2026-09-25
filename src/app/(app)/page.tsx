@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ContributionForm from "@/components/ContributionForm";
+import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { AlertsList, Kpi, MacroPanel, PortfolioTable, RadarTable, WhereToInvest } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
@@ -13,12 +14,15 @@ export default async function Dashboard() {
   const ctx = await loadContext(user);
   const { portfolio, analyses } = ctx;
   const values = Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0]));
-  const defaultAmount = (await ctx.repo.getSetting<number>("default_contribution")) ?? 550;
+  const [savedAmount, previous] = await Promise.all([
+    ctx.repo.getSetting<number>("default_contribution").catch(() => null),
+    ctx.repo.getLatestRecommendation().catch(() => null),
+  ]);
+  const defaultAmount = savedAmount ?? 550;
   const preview = allocate({
     contribution: defaultAmount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
   });
-  const previous = await ctx.repo.getLatestRecommendation().catch(() => null);
 
   const strategic = analyses.filter((a) => !a.strategy.is_legacy && a.strategy.enabled);
   const systemAlerts: { severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"; title: string; message: string }[] = [];
@@ -56,6 +60,7 @@ export default async function Dashboard() {
         </div>
         <div className="card card-tight">
           <GlobalFreshness />
+          <StaleRefresher computedAt={ctx.loadedAt} />
           <div className="xsmall faint" style={{ marginTop: 6 }}>Fonte: {ctx.providerName || "nenhum fornecedor configurado"}{providerErrors ? ` · ${providerErrors} consulta(s) sem dado` : ""}</div>
         </div>
       </section>

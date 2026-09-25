@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { cache } from "react";
 import { analyzeAsset, type AssetAnalysis, type StrategyRow } from "../analysis/analyze";
 import { deriveAlerts } from "../analysis/alerts";
@@ -6,7 +7,7 @@ import { computeMomentum, type Momentum } from "../analysis/indicators";
 import { FOMC_2026, macroImpacts, regimeReadings, type MacroDriverImpact, type RegimeReading } from "../analysis/macro";
 import { mergeSettings, type EngineSettings } from "../analysis/settings";
 import type { SessionUser } from "../auth";
-import { getRepo, type AlertRow, type Repo } from "../db/repo";
+import { getRepo, getServiceRepo, type AlertRow, type Repo } from "../db/repo";
 import { freshnessConfig } from "../freshness-config";
 import { getMarketDataProvider, isDemoProvider } from "../market";
 import { buildMeta, isOlderThan } from "../market/freshness";
@@ -57,28 +58,54 @@ export async function loadSettings(repo: Repo): Promise<EngineSettings> {
 // não refaz todas as consultas. Os preços continuam ao vivo no navegador
 // (LiveQuotes) e cada dado mantém seu timestamp. Invalidado ao salvar dados.
 // ---------------------------------------------------------------------------
-const CONTEXT_TTL_MS = 20_000;
-const contextCache = new Map<string, { at: number; data: Promise<Omit<LoadedContext, "repo">> }>();
+const FRESH_MS = 30_000; // até 30s: usa direto
+const STALE_MS = 15 * 60_000; // até 15 min: mostra na hora e recalcula em segundo plano
+type CacheEntry = { at: number; data: Promise<Omit<LoadedContext, "repo">>; settled: boolean; refreshing: boolean };
+const contextCache = new Map<string, CacheEntry>();
 
 export function invalidateUserContext(userId: string) {
   for (const key of contextCache.keys()) if (key.startsWith(`${userId}|`)) contextCache.delete(key);
 }
 
-/** Carrega e analisa a carteira inteira. Deduplicado por request (React cache) e por 20s em memória. */
+function store(key: string, data: Promise<Omit<LoadedContext, "repo">>) {
+  const entry: CacheEntry = { at: Date.now(), data, settled: false, refreshing: false };
+  contextCache.set(key, entry);
+  data.then(() => { entry.settled = true; }, () => { if (contextCache.get(key) === entry) contextCache.delete(key); });
+  if (contextCache.size > 50) contextCache.delete(contextCache.keys().next().value!);
+  return entry;
+}
+
+/**
+ * Carrega e analisa a carteira inteira. Deduplicado por request (React cache) e
+ * em memória com "stale-while-revalidate": trocar de aba nunca espera as APIs —
+ * a última análise aparece na hora (cada dado com seu timestamp e idade reais;
+ * preços seguem ao vivo no navegador) e uma nova é calculada em segundo plano.
+ */
 export const loadContext = cache(async (user: SessionUser, opts: { tickers?: string[]; repo?: Repo; fresh?: boolean } = {}): Promise<LoadedContext> => {
   const repo = opts.repo ?? (await getRepo(user.id));
   // O repositório é por request (cookies da sessão) — nunca entra no cache.
   if (opts.repo || opts.fresh) return { ...(await computeContext(user, repo, opts.tickers)), repo };
   const key = `${user.id}|${(opts.tickers ?? []).join(",")}`;
   const hit = contextCache.get(key);
-  if (hit && Date.now() - hit.at < CONTEXT_TTL_MS) {
-    try { return { ...(await hit.data), repo }; } catch { contextCache.delete(key); }
+  const age = hit ? Date.now() - hit.at : Infinity;
+
+  if (hit && (age < FRESH_MS || !hit.settled)) {
+    try { return { ...(await hit.data), repo }; } catch { /* recalcula abaixo */ }
+  } else if (hit && hit.settled && age < STALE_MS) {
+    if (!hit.refreshing) {
+      hit.refreshing = true;
+      // Recalcula depois de responder, com acesso de serviço limitado a este usuário.
+      after(async () => {
+        const bg = getServiceRepo(user.id);
+        if (!bg) { hit.refreshing = false; return; }
+        const next = store(key, computeContext(user, bg, opts.tickers));
+        await next.data.catch(() => undefined);
+      });
+    }
+    return { ...(await hit.data), repo };
   }
-  const data = computeContext(user, repo, opts.tickers);
-  contextCache.set(key, { at: Date.now(), data });
-  data.catch(() => contextCache.delete(key));
-  if (contextCache.size > 50) contextCache.delete(contextCache.keys().next().value!);
-  return { ...(await data), repo };
+  const entry = store(key, computeContext(user, repo, opts.tickers));
+  return { ...(await entry.data), repo };
 });
 
 async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string[]): Promise<Omit<LoadedContext, "repo">> {
