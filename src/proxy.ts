@@ -90,5 +90,5 @@ function deny(request: NextRequest, reason: "unauthenticated" | "forbidden", sou
 
 export const config = {
   // Ícones, manifest e o motor de OCR local (arquivos estáticos, sem dados) ficam públicos.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon|pwa-icon|manifest.webmanifest|ocr/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon|apple-touch-icon|pwa-icon|manifest.webmanifest|ocr/).*)"],
 };

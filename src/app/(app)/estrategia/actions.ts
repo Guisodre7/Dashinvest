@@ -47,7 +47,7 @@ export async function saveStrategy(_: FormState, fd: FormData): Promise<FormStat
     const sum = rows.filter((r) => r.enabled && !r.is_legacy).reduce((s, r) => s + r.target_weight, 0);
     if (Math.abs(sum - 100) > 0.05) throw new Error(`A soma dos pesos-alvo ativos é ${sum.toFixed(2)}% — deve ser 100%.`);
     await repo.saveStrategy(rows);
-    invalidateUserContext(user.id);
+    await invalidateUserContext(user.id);
     revalidatePath("/", "layout");
     return { ok: true, message: "Estratégia salva." };
   } catch (err) {
@@ -71,7 +71,7 @@ export async function addAsset(_: FormState, fd: FormData): Promise<FormState> {
         is_legacy: false, legacy_label: null, priority: 5, strategy_bucket: String(fd.get("bucket") ?? "OUTROS").toUpperCase() || "OUTROS",
       }]);
     }
-    invalidateUserContext(user.id);
+    await invalidateUserContext(user.id);
     revalidatePath("/", "layout");
     return { ok: true, message: `${ticker} adicionado (desativado, peso 0). Ajuste os pesos para incluí-lo.` };
   } catch (err) {
@@ -98,7 +98,7 @@ export async function saveEngineSettings(_: FormState, fd: FormData): Promise<Fo
     await repo.setSetting("engine", mergeSettings(raw));
     const def = num(fd.get("default_contribution"));
     if (def !== null && def > 0) await repo.setSetting("default_contribution", def);
-    invalidateUserContext(user.id);
+    await invalidateUserContext(user.id);
     revalidatePath("/", "layout");
     return { ok: true, message: "Configurações salvas." };
   } catch (err) {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { LiveChange, LiveFreshness, LivePrice, LiveQuotesProvider } from "@/components/LiveQuotes";
+import { LivePositionValue } from "@/components/LivePortfolio";
 import PriceChart from "@/components/PriceChart";
 import StaleRefresher from "@/components/StaleRefresher";
 import { Kpi, ScoreBadge } from "@/components/sections";
@@ -77,7 +78,7 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       )}
 
       <section className="section grid grid-4">
-        <Kpi label="Minha posição" value={position?.quantity ? usd(position.valueUsd) : "Sem posição"} sub={position?.quantity ? `${n(position.quantity, 4)} cotas · PM ${usd(position.avgPrice)}` : undefined} />
+        <Kpi label="Minha posição" value={position?.quantity ? <LivePositionValue ticker={ticker} quantity={position.quantity} fallbackPrice={position.price} /> : "Sem posição"} sub={position?.quantity ? `${n(position.quantity, 4)} cotas · PM ${usd(position.avgPrice)}` : undefined} />
         <Kpi label="Peso atual / alvo" value={`${n(a.currentWeight, 2)}% / ${n(a.targetWeight, 2)}%`} sub={a.strategy.is_legacy ? "posição legada — fora dos aportes" : `desvio ${pp(a.gap)}`} />
         <Kpi label="Aporte sugerido" value={recLine ? (recLine.amount > 0 ? usd(recLine.amount) : "Aguardar") : "—"} sub={recLine ? `${recLine.action} · cálculo de ${new Date(lastRec!.generatedAt).toLocaleString("pt-BR")}` : "calcule o aporte no painel"} />
         <Kpi label="Retorno" value={pct(position?.assetReturn, 1, true)} cls={tone(position?.assetReturn)} sub={position ? `câmbio ${pct(position.fxReturn, 1, true)} · total BRL ${pct(position.totalReturnBrl, 1, true)}` : undefined} />

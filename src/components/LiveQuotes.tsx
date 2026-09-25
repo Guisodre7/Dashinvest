@@ -69,7 +69,7 @@ export function LiveQuotesProvider({ initial, cfg, children }: { initial: Record
   return <QuotesContext.Provider value={{ quotes, now, cfg, lastPoll, pollError }}>{children}</QuotesContext.Provider>;
 }
 
-function useQuotes() {
+export function useQuotes() {
   const ctx = useContext(QuotesContext);
   if (!ctx) throw new Error("LiveQuotesProvider ausente");
   return ctx;

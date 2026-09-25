@@ -2,11 +2,12 @@ import Link from "next/link";
 import ContributionForm from "@/components/ContributionForm";
 import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
-import { AlertsList, Kpi, MacroPanel, PortfolioTable, RadarTable, WhereToInvest } from "@/components/sections";
+import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
+import { AlertsList, MacroPanel, RadarTable, WhereToInvest } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { brl, dateBr, n, pct, tone, usd } from "@/lib/format";
+import { dateBr, pct, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 
 export default async function Dashboard() {
@@ -41,22 +42,18 @@ export default async function Dashboard() {
   const moreInteresting = strategic.filter((a) => a.signals.some((s) => s.kind === "OPPORTUNITY" || s.kind === "VALUATION_COMPRESSION"));
   const stretched = analyses.filter((a) => a.signals.some((s) => s.kind === "ANTI_FOMO") || a.zones.current === "D");
   const nextEvents = [...analyses.flatMap((a) => a.events.map((e) => ({ ...e }))), ...ctx.macroEvents].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  const fallbackPrices = Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.price]));
   const daysTo = (d: string) => Math.round((new Date(`${d}T12:00:00Z`).getTime() - new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00Z`).getTime()) / 86_400_000);
 
   return (
     <LiveQuotesProvider initial={ctx.quotes} cfg={{ maxMarketDataAgeSec: freshnessConfig.maxMarketDataAgeSec, maxMarketDataAgeClosedSec: freshnessConfig.maxMarketDataAgeClosedSec }}>
+      <LivePortfolioProvider positions={ctx.positions} strategy={ctx.strategy} dividends={ctx.dividends} usdBrl={ctx.fx?.rate ?? null} fallbackPrices={fallbackPrices}>
       {ctx.isDemo && <div className="banner banner-warn" style={{ marginTop: 16 }}><strong>DADOS SINTÉTICOS DE DEMONSTRAÇÃO</strong> — nenhum preço, notícia ou estimativa desta tela é real. Configure as API keys para dados reais.</div>}
 
       <section className="hero">
         <div>
           <div className="hero-title">Carteira Internacional — Guilherme</div>
-          <div className="hero-value num">{usd(portfolio.totalUsd)}</div>
-          <div className="row-wrap small muted">
-            <span className="num">{portfolio.totalBrl !== null ? brl(portfolio.totalBrl) : "BRL indisponível"}{ctx.fx && <span className="faint"> · USD/BRL {n(ctx.fx.rate, 4)}</span>}</span>
-            <span className={`num ${tone(portfolio.assetReturn)}`}>Ativos {pct(portfolio.assetReturn, 2, true)}</span>
-            <span className={`num ${tone(portfolio.fxReturn)}`}>Câmbio {pct(portfolio.fxReturn, 2, true)}</span>
-            <span className={`num ${tone(portfolio.totalReturnBrl)}`}>Total BRL {pct(portfolio.totalReturnBrl, 2, true)}</span>
-          </div>
+          <LiveHeroValue fxRate={ctx.fx?.rate ?? null} />
         </div>
         <div className="card card-tight">
           <GlobalFreshness />
@@ -68,10 +65,7 @@ export default async function Dashboard() {
       {!ctx.providerName && <div className="banner banner-neg">Nenhum fornecedor de dados configurado. Defina FINNHUB_API_KEY e/ou ALPHA_VANTAGE_API_KEY.</div>}
 
       <section className="section grid grid-4">
-        <Kpi label="Custo investido" value={usd(portfolio.costUsd)} sub={portfolio.costBrl !== null ? brl(portfolio.costBrl) : "câmbio de compra não informado"} />
-        <Kpi label="Lucro / prejuízo" value={usd(portfolio.pnlUsd)} cls={tone(portfolio.pnlUsd)} sub="retorno do ativo em US$" />
-        <Kpi label="Proventos recebidos" value={usd(portfolio.dividendsUsd)} sub="dividendos + distribuições líquidos" />
-        <Kpi label="Posição legada / Anchor" value={usd(portfolio.legacyUsd)} sub="VOO — monitorado, fora dos aportes" />
+        <LivePortfolioKpis />
       </section>
 
       <section className="section">
@@ -104,7 +98,7 @@ export default async function Dashboard() {
 
       <section className="section">
         <div className="section-head"><h2>📊 Carteira</h2><Link href="/carteira" className="small muted">Editar posições →</Link></div>
-        <PortfolioTable portfolio={portfolio} />
+        <LivePortfolioTable />
         <p className="xsmall faint" style={{ marginTop: 6 }}>Pesos calculados sobre a carteira estratégica (exclui a posição legada VOO). Retorno total BRL = (1 + retorno do ativo) × (1 + retorno cambial) − 1.</p>
       </section>
 
@@ -124,6 +118,7 @@ export default async function Dashboard() {
           <ul className="clean xsmall faint">{ctx.errors.slice(0, 60).map((e, i) => <li key={i}>{e}</li>)}</ul>
         </details>
       )}
+      </LivePortfolioProvider>
     </LiveQuotesProvider>
   );
 }

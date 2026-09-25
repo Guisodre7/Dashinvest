@@ -33,7 +33,7 @@ export interface FormState { ok: boolean; message: string | null }
 async function run(fn: () => Promise<string>): Promise<FormState> {
   try {
     const message = await fn();
-    invalidateUserContext((await requireUser()).id);
+    await invalidateUserContext((await requireUser()).id);
     revalidatePath("/", "layout");
     return { ok: true, message };
   } catch (err) {

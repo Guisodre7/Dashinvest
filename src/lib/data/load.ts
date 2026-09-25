@@ -1,4 +1,5 @@
 import "server-only";
+import { cookies, headers } from "next/headers";
 import { after } from "next/server";
 import { cache } from "react";
 import { analyzeAsset, type AssetAnalysis, type StrategyRow } from "../analysis/analyze";
@@ -14,7 +15,7 @@ import { buildMeta, isOlderThan } from "../market/freshness";
 import { getMarketStatus } from "../market/marketStatus";
 import type { FxRate } from "../market/provider";
 import type { MacroIndicator, MarketEvent, NewsItem, PriceHistory, Quote } from "../market/types";
-import { computePortfolio, type PortfolioSummary } from "../portfolio/calc";
+import { computePortfolio, type DividendRow, type PortfolioSummary, type PositionRow } from "../portfolio/calc";
 import { assetMeta } from "../portfolio/defaults";
 
 export interface LoadedContext {
@@ -23,6 +24,9 @@ export interface LoadedContext {
   settings: EngineSettings;
   strategy: StrategyRow[];
   portfolio: PortfolioSummary;
+  /** Dados brutos para recalcular o patrimônio no navegador com os preços ao vivo. */
+  positions: PositionRow[];
+  dividends: DividendRow[];
   analyses: AssetAnalysis[];
   quotes: Record<string, Quote | null>;
   fx: FxRate | null;
@@ -54,17 +58,26 @@ export async function loadSettings(repo: Repo): Promise<EngineSettings> {
 }
 
 // ---------------------------------------------------------------------------
-// Cache curto em memória (por instância do servidor): navegar entre as abas
-// não refaz todas as consultas. Os preços continuam ao vivo no navegador
-// (LiveQuotes) e cada dado mantém seu timestamp. Invalidado ao salvar dados.
+// Cache curto em memória (por instância do servidor), só para TROCA DE ABA:
+// a última análise aparece na hora e uma nova é calculada em segundo plano.
+// - Abrir o app / recarregar a página (nova sessão) nunca usa análise com
+//   mais de 30s: vem tudo recalculado.
+// - Qualquer gravação muda o cookie de versão dos dados, que faz parte da
+//   chave: nenhuma instância serve posições anteriores a uma compra.
+// - Patrimônio e preços seguem ao vivo no navegador (LiveQuotes).
 // ---------------------------------------------------------------------------
 const FRESH_MS = 30_000; // até 30s: usa direto
-const STALE_MS = 15 * 60_000; // até 15 min: mostra na hora e recalcula em segundo plano
+const STALE_MS = 10 * 60_000; // troca de aba: até 10 min mostra na hora e recalcula em segundo plano
+const DATA_VERSION_COOKIE = "dv";
 type CacheEntry = { at: number; data: Promise<Omit<LoadedContext, "repo">>; settled: boolean; refreshing: boolean };
 const contextCache = new Map<string, CacheEntry>();
 
-export function invalidateUserContext(userId: string) {
+/** Chamar em toda server action que grava dados do usuário. */
+export async function invalidateUserContext(userId: string) {
   for (const key of contextCache.keys()) if (key.startsWith(`${userId}|`)) contextCache.delete(key);
+  try {
+    (await cookies()).set(DATA_VERSION_COOKIE, Date.now().toString(36), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 400 * 86_400 });
+  } catch { /* fora de server action: só a invalidação local */ }
 }
 
 function store(key: string, data: Promise<Omit<LoadedContext, "repo">>) {
@@ -75,23 +88,28 @@ function store(key: string, data: Promise<Omit<LoadedContext, "repo">>) {
   return entry;
 }
 
+/** Navegação dentro do app (RSC) × carregamento completo da página. */
+async function isClientNavigation() {
+  try { return (await headers()).get("rsc") === "1"; } catch { return false; }
+}
+
 /**
- * Carrega e analisa a carteira inteira. Deduplicado por request (React cache) e
- * em memória com "stale-while-revalidate": trocar de aba nunca espera as APIs —
- * a última análise aparece na hora (cada dado com seu timestamp e idade reais;
- * preços seguem ao vivo no navegador) e uma nova é calculada em segundo plano.
+ * Carrega e analisa a carteira inteira. Deduplicado por request (React cache).
+ * Na troca de aba usa "stale-while-revalidate" (ver acima); ao abrir o app,
+ * sempre dados atuais.
  */
 export const loadContext = cache(async (user: SessionUser, opts: { tickers?: string[]; repo?: Repo; fresh?: boolean } = {}): Promise<LoadedContext> => {
   const repo = opts.repo ?? (await getRepo(user.id));
   // O repositório é por request (cookies da sessão) — nunca entra no cache.
   if (opts.repo || opts.fresh) return { ...(await computeContext(user, repo, opts.tickers)), repo };
-  const key = `${user.id}|${(opts.tickers ?? []).join(",")}`;
+  const version = await cookies().then((c) => c.get(DATA_VERSION_COOKIE)?.value ?? "0", () => "0");
+  const key = `${user.id}|${version}|${(opts.tickers ?? []).join(",")}`;
   const hit = contextCache.get(key);
   const age = hit ? Date.now() - hit.at : Infinity;
 
   if (hit && (age < FRESH_MS || !hit.settled)) {
     try { return { ...(await hit.data), repo }; } catch { /* recalcula abaixo */ }
-  } else if (hit && hit.settled && age < STALE_MS) {
+  } else if (hit && hit.settled && age < STALE_MS && (await isClientNavigation())) {
     if (!hit.refreshing) {
       hit.refreshing = true;
       // Recalcula depois de responder, com acesso de serviço limitado a este usuário.
@@ -206,7 +224,7 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
   }));
 
   return {
-    user, settings, strategy, portfolio, analyses, quotes, fx, fxStale, macro, regime,
+    user, settings, strategy, portfolio, positions, dividends, analyses, quotes, fx, fxStale, macro, regime,
     impacts: macroImpacts(regime), marketNews: (marketNews ?? []).slice(0, 20), macroEvents, alerts,
     providerName: provider.name, isDemo: isDemoProvider(), errors,
     opportunityCashBalance: typeof cashBalance === "number" ? cashBalance : 0,
