@@ -5,6 +5,7 @@ import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
 import AllocationView from "@/components/AllocationView";
+import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
 import ClassRow from "@/components/ClassRow";
 import LedgerForm from "@/components/LedgerForm";
@@ -35,7 +36,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   const repo = await getRepo(user.id);
   const br = await loadBrazil(repo);
   // Fundamentos só quando a aba de aporte/valuation é aberta (mais rápido no resto).
-  const brs = tab === "aporte" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
+  const brs = tab === "aporte" || tab === "resumo" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
   const aporteValor = parseUserNumber(valor);
   const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? brAllocationResult(allocateBr(aporteValor, br.summary, br.strategy, brs.views), br.summary, br.strategy, brs.views) : null;
   const hist = tab === "aporte" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
@@ -55,6 +56,15 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   };
   const label = (h: { code: string; name: string | null; asset_class: Parameters<typeof PRICED.has>[0] }) => (PRICED.has(h.asset_class) ? h.code : h.name ?? h.code);
   const recent = [...br.entries].reverse().slice(0, 30);
+  const summaryAssets: SummaryAsset[] = brs.views.map((v) => ({ stance: v.stance, price: v.price, href: `/brasil?aba=aporte#br-${v.code}` }));
+  // Próximo aporte (prévia): quem tem prioridade média/alta e está abaixo da meta.
+  const nextUp = brs.views.map((v) => {
+    const a = strategy.assets.find((x) => x.code === v.code);
+    const nIn = strategy.assets.filter((x) => x.enabled && x.asset_class === v.assetClass).length || 1;
+    const target = a?.enabled ? strategy.classes[v.assetClass] / nIn : 0;
+    const cur = s.currentValue > 0 ? s.holdings.find((h) => h.code === v.code)?.weight ?? 0 : null;
+    return { v, priority: a?.enabled ? priorityFromStance(v.stance.action, cur, target) : "BAIXA" as const };
+  }).filter((x) => x.priority !== "BAIXA").sort((a, b) => (a.priority === "ALTA" ? 0 : 1) - (b.priority === "ALTA" ? 0 : 1));
   // "Onde aportar": todos os ativos do radar, com o valuation dentro da linha.
   const board: BoardRow[] = tab === "aporte" ? strategy.assets.filter((a) => a.enabled || s.holdings.some((h) => h.code === a.code && h.quantity > 0)).map((a) => {
     const v = brs.views.find((x) => x.code === a.code);
@@ -63,7 +73,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
     const current = s.currentValue > 0 ? h?.weight ?? 0 : null, target = a.enabled ? strategy.classes[a.asset_class] / nIn : 0;
     return {
       id: `br-${a.code}`, ticker: a.code, bucket: CLASS_LABEL[a.asset_class], priority: a.enabled ? priorityFromStance(v?.stance.action, current, target) : "BAIXA",
-      stance: v?.stance ?? null, current, target,
+      price: v?.price ?? null, cur: "R$" as const, stance: v?.stance ?? null, current, target,
       note: !a.enabled ? "Fora da estratégia: não recebe aporte." : !v ? `Sem dados de valuation${brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""}: espera.` : overTarget(current, target) ? `${v.stance.headline} Espera: já na meta ou acima.` : v.stance.headline,
       detail: v ? (
         <StanceCard s={v.stance} price={v.price} cur="R$" name={v.name ?? undefined} compact href={`/analisar?ativo=${encodeURIComponent(a.code)}&mercado=BR`}>
@@ -102,18 +112,30 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         <>
       <section className="section grid grid-4 kpis-compact">
         <Kpi label="Dinheiro que eu coloquei" value={brl(s.contributed)} sub={`voltou ${brl(s.withdrawn)} em vendas/resgates`} />
-        <Kpi label="Valorização (não realizada)" value={brl(s.unrealized)} cls={tone(s.unrealized)} sub="valor atual − custo" />
-        <Kpi label="Lucro realizado" value={brl(s.realized)} cls={tone(s.realized)} sub="vendas e resgates" />
+        <Kpi label="Lucro / prejuízo" value={brl(s.unrealized)} cls={tone(s.unrealized)} sub={`realizado ${brl(s.realized)}`} />
         <Kpi label="Dividendos e rendimentos" value={brl(s.income)} sub={`no mês: ${brl(monthIncome)}`} />
         <Kpi label="Aporte do mês" value={brl(monthIn)} sub="compras + aportes" />
-        <Kpi label="Maior posição" value={s.largest ? s.largest.name ?? s.largest.code : "—"} sub={s.largest ? `${n(s.largest.weight, 1)}% da carteira` : undefined} />
-        <Kpi label="Maior ganho" value={s.bestGain ? label(s.bestGain) : "—"} cls="pos" sub={s.bestGain ? brl(s.bestGain.unrealized) : undefined} />
-        <Kpi label="Maior perda" value={s.worstLoss ? label(s.worstLoss) : "—"} cls={s.worstLoss ? "neg" : ""} sub={s.worstLoss ? brl(s.worstLoss.unrealized) : undefined} />
       </section>
 
-      <section className="section">
-        <div className="section-head"><h2>Alocação atual × desejada</h2><span className="xsmall faint">metas editáveis abaixo</span></div>
+      <section className="section grid grid-2">
+        <BuyCard items={summaryAssets} cur="R$" href="/brasil?aba=aporte" />
+        <SellCard items={summaryAssets} cur="R$" />
+      </section>
+
+      <section className="section grid grid-2">
         <div className="card stack">
+          <div className="row-between"><h3>Próximo aporte</h3><Link href="/brasil?aba=aporte" scroll={false} className="small">Calcular →</Link></div>
+          {nextUp.length ? (
+            <ul className="decision-list">
+              {nextUp.slice(0, 5).map(({ v, priority }) => (
+                <li key={v.code}><Link href={`/brasil?aba=aporte#br-${v.code}`} className="ticker">{v.code}</Link><span className={`badge ${priority === "ALTA" ? "badge-pos" : ""}`}>{priority === "ALTA" ? "Alta · oportunidade" : "Média · aporte normal"}</span></li>
+              ))}
+            </ul>
+          ) : <p className="small faint">Nenhum ativo com prioridade média ou alta agora: o aporte vai para renda fixa ou caixa de oportunidade.</p>}
+          {s.classes.some((c) => c.asset_class === "renda_fixa" && (c.toTarget ?? 0) >= 1) && <p className="xsmall muted">Renda fixa abaixo da meta também recebe parte do aporte.</p>}
+        </div>
+        <div className="card stack">
+          <div className="row-between"><h3>Alocação atual × meta</h3><Link href="/brasil?aba=estrategia" scroll={false} className="small">Metas →</Link></div>
           {s.classes.filter((c) => c.target > 0 || c.value > 0).map((c) => (
             <div key={c.asset_class} className="alloc-row">
               <div className="alloc-label"><strong>{CLASS_LABEL[c.asset_class]}</strong><span className="xsmall faint num">{brl(c.value)}</span></div>
@@ -127,7 +149,24 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
               )}
             </div>
           ))}
-          {s.currentValue === 0 && <p className="small faint">Sem posições ainda. Registre compras, aportes ou saldos abaixo.</p>}
+          {s.currentValue === 0 && <p className="small faint">Sem posições ainda. Registre compras, aportes ou saldos em Movimentar.</p>}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="card stack">
+          <div className="row-between"><h3>Minhas posições</h3><Link href="/brasil?aba=posicoes" scroll={false} className="small">Tabela completa →</Link></div>
+          {s.holdings.length === 0 ? <p className="small faint">Nenhuma posição registrada.</p> : (
+            <ul className="decision-list">
+              {s.holdings.map((h) => (
+                <li key={h.code}>
+                  <span className="ticker">{label(h)}</span>
+                  <span className={`xsmall num ${tone(h.unrealized)}`}>{pct(h.unrealizedPct, 1, true)} · {n(h.weight, 1)}%</span>
+                  <strong className="num">{brl(h.value)}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 

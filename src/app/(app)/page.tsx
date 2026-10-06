@@ -4,10 +4,10 @@ import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
 import StanceCard from "@/components/StanceCard";
+import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
 import { AlertsList, RadarTable } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
-import { ACTION_META } from "@/lib/analysis/stance";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
 import { loadStances, stanceActions } from "@/lib/data/stances";
@@ -60,11 +60,18 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     return {
       id: `us-${a.ticker}`, ticker: a.ticker, bucket: a.strategy.is_legacy ? "Legado" : a.strategy.strategy_bucket,
       priority: a.strategy.is_legacy ? "BAIXA" : line ? line.priority : priorityFromStance(stance?.action, a.currentWeight, a.targetWeight),
-      stance, current: a.currentWeight, target: a.targetWeight,
+      price: a.price, cur: "US$" as const, stance, current: a.currentWeight, target: a.targetWeight,
       note: a.strategy.is_legacy ? "Posição legada: não recebe aporte." : [stance?.headline, waitWhy ? `Espera: ${waitWhy}.` : !line && overTarget(a.currentWeight, a.targetWeight) ? "Espera: já na meta ou acima." : null].filter(Boolean).join(" ") || "Sem dados suficientes para valuation.",
       detail: (
         <>
           {stance ? <StanceCard s={stance} price={a.price} name={a.name} compact href={`/ativo/${encodeURIComponent(a.ticker)}#realizacao`} /> : <p className="small faint">Sem faixa de valuation (dados insuficientes).</p>}
+          {a.fairValue.estimates.length > 0 && (
+            <div className="xsmall muted">
+              Valor justo {a.fairValue.available ? `(mediana dos métodos: US$ ${a.fairValue.mean!.toFixed(2)})` : "não usado"}: {a.fairValue.estimates.map((e) => `${e.method} = US$ ${e.value.toFixed(2)}`).join(" · ")}
+              {a.fairValue.reason && <div className="warn">{a.fairValue.reason}</div>}
+              <div className="faint">Fontes: {[...new Set(a.fairValue.estimates.map((e) => e.source))].join(", ")}</div>
+            </div>
+          )}
           {a.signals.filter((x) => x.kind !== "STALE_DATA").length > 0 && (
             <ul className="clean xsmall">{a.signals.filter((x) => x.kind !== "STALE_DATA").slice(0, 3).map((x) => <li key={x.kind} className={x.tone === "positive" ? "pos" : x.tone === "negative" ? "neg" : "muted"}>{x.title}</li>)}</ul>
           )}
@@ -73,8 +80,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       ),
     };
   }) : [];
-  const decisions = (st?.stances ?? []).filter((s) => ["realizacao", "reduzir", "recompra", "comprar", "evitar", "sair"].includes(s.action))
-    .sort((a, b) => ["realizacao", "reduzir", "recompra", "sair", "comprar", "evitar"].indexOf(a.action) - ["realizacao", "reduzir", "recompra", "sair", "comprar", "evitar"].indexOf(b.action));
+  const summaryAssets: SummaryAsset[] = (st?.stances ?? []).map((s) => ({ stance: s, price: analyses.find((a) => a.ticker === s.ticker)?.price ?? null, href: `/?aba=aporte#us-${s.ticker}` }));
   const fallbackPrices = Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.price]));
   const movers = [...analyses].filter((a) => a.quote?.change_pct != null).sort((a, b) => Math.abs(b.quote!.change_pct!) - Math.abs(a.quote!.change_pct!)).slice(0, 3);
 
@@ -98,29 +104,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       {tab === "resumo" && (
         <>
           <section className="section grid grid-2">
-            <div className="card stack">
-              <div className="row-between"><h3>Decisões agora</h3><Link href="/?aba=aporte" scroll={false} className="small">Aporte e valuation →</Link></div>
-              {decisions.length === 0 ? <p className="small faint">Nada pede ação: posições em faixa justa ou sem dados suficientes.</p> : (
-                <ul className="decision-list">
-                  {decisions.slice(0, 5).map((s) => (
-                    <li key={s.ticker}>
-                      <Link href={`/ativo/${encodeURIComponent(s.ticker)}#realizacao`} className="ticker">{s.ticker}</Link>
-                      <span className={`badge action-${ACTION_META[s.action].group}`}>{ACTION_META[s.action].emoji} {ACTION_META[s.action].label}</span>
-                      <span className="xsmall muted">{s.headline}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="card stack">
-              <div className="row-between"><h3>Alertas importantes</h3><Link href="/?aba=alertas" scroll={false} className="small">Todos ({alertCount}) →</Link></div>
-              {important.length === 0 ? <p className="small faint">Nenhum alerta importante.</p> : (
-                <ul className="decision-list">
-                  {important.slice(0, 4).map((a, i) => <li key={i}><span className={`sev sev-${a.severity}`}>{a.severity}</span><span className="small">{a.title}</span></li>)}
-                </ul>
-              )}
-              {movers.length > 0 && <p className="xsmall muted">Maiores movimentos hoje: {movers.map((a) => `${a.ticker} ${pct(a.quote!.change_pct, 1, true)}`).join(" · ")}</p>}
-            </div>
+            <BuyCard items={summaryAssets} cur="US$" href="/?aba=aporte" />
+            <SellCard items={summaryAssets} cur="US$" />
           </section>
 
           <section className="section grid grid-2">
@@ -134,6 +119,18 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 </ul>
               ) : <p className="small faint">{preview?.blocked ? `Aporte bloqueado: ${preview.blockReasons[0] ?? "dados insuficientes"}` : "Sem sugestão de compra com os dados atuais."}</p>}
             </div>
+            <div className="card stack">
+              <div className="row-between"><h3>Alertas importantes</h3><Link href="/?aba=alertas" scroll={false} className="small">Todos ({alertCount}) →</Link></div>
+              {important.length === 0 ? <p className="small faint">Nenhum alerta importante.</p> : (
+                <ul className="decision-list">
+                  {important.slice(0, 4).map((a, i) => <li key={i}><span className={`sev sev-${a.severity}`}>{a.severity}</span><span className="small">{a.title}</span></li>)}
+                </ul>
+              )}
+              {movers.length > 0 && <p className="xsmall muted">Maiores movimentos hoje: {movers.map((a) => `${a.ticker} ${pct(a.quote!.change_pct, 1, true)}`).join(" · ")}</p>}
+            </div>
+          </section>
+
+          <section className="section">
             <div className="card stack">
               <div className="row-between"><h3>Minhas posições</h3><Link href="/?aba=carteira" scroll={false} className="small">Tabela completa →</Link></div>
               <LivePortfolioTable heldOnly />

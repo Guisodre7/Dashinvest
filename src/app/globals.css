@@ -378,7 +378,10 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
   .only-desktop { display: none !important; }
 
   /* Topo compacto e rolável; navegação vai para a barra inferior. */
-  .topbar { position: static; }
+  /* relative + z-index: o painel do sino fica acima do submenu fixo. */
+  .topbar { position: relative; z-index: 30; }
+  .topbar .bell { position: static; }
+  .topbar .bell-pop { left: 12px; right: 12px; top: calc(100% + 4px); width: auto; max-height: calc(100vh - 170px); }
   .topbar-inner { padding: 8px 16px; flex-wrap: nowrap; gap: 8px; }
   .topbar .nav { display: none; }
   .brand { flex: 1; min-width: 0; }
@@ -514,3 +517,6 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 .nav a:has(.is-pending) { background: var(--accent-soft); color: var(--accent); }
 @keyframes nav-pulse { 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .navitem.is-pending { animation: none; } }
+
+/* Resumo: venda parcial sugerida */
+.sell-item + .sell-item { border-top: 1px dashed var(--border); padding-top: 10px; }

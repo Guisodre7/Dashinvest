@@ -13,14 +13,14 @@ const base: StanceInput = {
 const s = (over: Partial<StanceInput>) => computeStance({ ...base, ...over });
 
 describe("valuation, realização parcial e recompra", () => {
-  it("excelente + extremamente esticada + 30% da carteira (meta 10%) → realização parcial em faixa, nunca 100%", () => {
+  it("excelente + extremamente esticada (+30% do valor justo) → realização parcial em faixa, nunca 100%", () => {
     const r = s({ price: 104 }); // +30% sobre o valor justo médio
     expect(r.band).toBe("extremo");
     expect(r.action).toBe("realizacao");
-    expect(r.realization!.pctLow).toBe(20);
-    expect(r.realization!.pctHigh).toBe(30);
-    expect(r.realization!.sharesHigh).toBe(30);
-    expect(r.realization!.estTax).toBeCloseTo(30 * 44 * 0.15);
+    expect(r.realization!.pctLow).toBe(10);
+    expect(r.realization!.pctHigh).toBe(20);
+    expect(r.realization!.sharesHigh).toBe(20);
+    expect(r.realization!.estTax).toBeCloseTo(20 * 44 * 0.15);
     expect(r.realization!.note).toMatch(/não ordem/);
   });
 
@@ -29,6 +29,18 @@ describe("valuation, realização parcial e recompra", () => {
     expect(r.band).toBe("esticado");
     expect(r.action).toBe("nao_aumentar");
     expect(r.realization).toBeNull();
+  });
+
+  it("venda é decidida pelo preço, não pelo peso: esticada demais com peso abaixo da meta ainda realiza", () => {
+    const r = s({ price: 104, weight: 5, target: 10 });
+    expect(r.action).toBe("realizacao");
+    expect(r.headline).toMatch(/acima do valor justo/);
+  });
+
+  it("nunca vende só para reequilibrar: 30% da carteira (meta 10%) com preço justo ou um pouco esticado", () => {
+    expect(s({ price: 80 }).action).toBe("manter");
+    expect(s({ price: 90 }).action).toBe("nao_aumentar");
+    expect(s({ price: 90 }).realization).toBeNull();
   });
 
   it("variação de preço ≠ valuation: subiu 50% e continua abaixo do valor justo → não é esticada", () => {

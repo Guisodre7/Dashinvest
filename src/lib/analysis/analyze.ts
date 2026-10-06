@@ -7,7 +7,7 @@ import { consensusView, estimateTrend, type ConsensusView, type EstimateTrend, t
 import { computeDrawdown, computeMomentum, type Drawdown, type Momentum } from "./indicators";
 import { newsSignal, rankNews, type ScoredNews } from "./news";
 import { FACTOR_KEYS, FACTOR_LABELS, type EngineSettings, type FactorKey } from "./settings";
-import { businessQuality, fairValueView, valuationView, type BusinessQuality, type FairValueView, type ValuationView } from "./valuation";
+import { businessQuality, fairValueView, PE_CAP, valuationView, type BusinessQuality, type FairValueView, type ValuationView } from "./valuation";
 
 export interface StrategyRow {
   ticker: string;
@@ -517,8 +517,9 @@ export function accumulationZones(
   let anchorLabel = "";
   if (fv.available && fv.mean) {
     anchor = fv.mean * adj; basis = "fair-value"; anchorLabel = "fair value médio estimado";
-  } else if (!isEtf && f?.eps_ttm && f.eps_ttm > 0 && f.pe_5y_avg) {
-    anchor = f.eps_ttm * f.pe_5y_avg * adj; basis = "historical-multiple"; anchorLabel = "preço implícito pelo P/L médio de 5 anos";
+  } else if (!isEtf && fv.estimates.length < 2 && f?.eps_ttm && f.eps_ttm > 0 && f.pe_5y_avg) {
+    // Só quando faltam métodos — se os métodos existem mas conflitam, não há faixa.
+    anchor = f.eps_ttm * Math.min(f.pe_5y_avg, PE_CAP) * adj; basis = "historical-multiple"; anchorLabel = "preço implícito pelo P/L histórico";
   }
 
   const describe = (level: number) => {

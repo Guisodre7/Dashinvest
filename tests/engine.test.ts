@@ -58,6 +58,23 @@ describe("fair value", () => {
   it("não se aplica a ETF", () => {
     expect(fairValueView(100, null, null, null, true).reason).toMatch(/ETF/);
   });
+
+  // Caso real NVDA: P/L histórico inflado por anos de lucro baixo + EPS do ano fiscal seguinte
+  // levavam a "-64% (compra forte)". Agora: EPS do ano corrente, P/L com teto e mediana dos métodos.
+  const f = { pe_5y_avg: 60, eps_ttm: 4.5, forward_pe: null, meta: meta() } as never;
+  const trend = { eps_fy0: 6, eps_current: 9 } as never;
+  const analysts = { target_mean: 230, meta: meta() } as never;
+  it("P/L histórico tem teto e o valor justo é a mediana dos métodos", () => {
+    const fv = fairValueView(185, f, trend, analysts, false);
+    expect(fv.estimates.map((e) => Math.round(e.value))).toEqual([210, 230, 158]); // 6×35, alvo, 4,5×35
+    expect(fv.mean).toBe(210);
+    expect(fv.discount_pct!).toBeGreaterThan(-15);
+  });
+  it("desconto implausível não vira faixa de compra", () => {
+    const fv = fairValueView(90, f, trend, analysts, false);
+    expect(fv.available).toBe(false);
+    expect(fv.reason).toMatch(/longe demais/);
+  });
 });
 
 describe("motor de alocação", () => {

@@ -69,6 +69,11 @@ describe("regras de notificação", () => {
     expect(d.find((x) => x.key === "C")?.delivery).toBe("sent");
   });
 
+  it("primeira rodada do monitor não dispara rajada: só a central", () => {
+    const d = decide([cand({ key: "A", ticker: "A" }), cand({ key: "B", ticker: "B" }), cand({ key: "C", ticker: "C" })], on, [], day, true);
+    expect(d.every((x) => x.delivery === "in_app")).toBe(true);
+  });
+
   it("agrupa mais de 2 pushes em um só e esconde valores na tela bloqueada", () => {
     const d = decide([cand({ key: "A", ticker: "A" }), cand({ key: "B", ticker: "B" }), cand({ key: "C", ticker: "C" })], on, [], day);
     const msgs = groupPushes(d, true, "r1");

@@ -67,6 +67,11 @@ export function valuationView(f: Fundamentals | null, trend: EstimateTrend | nul
   return v;
 }
 
+/** Teto do P/L histórico usado no valor justo (crescimento passado não se repete para sempre). */
+export const PE_CAP = 35;
+/** Preço ÷ valor justo fora desta faixa = dado não confiável. */
+const PLAUSIBLE = [0.55, 2] as const;
+
 export interface FairValueEstimate {
   method: string;
   value: number;
@@ -103,29 +108,39 @@ export function fairValueView(
   if (isEtf) return empty("Fair value não se aplica a ETFs — avalie yield, duration e composição.");
   const est: FairValueEstimate[] = [];
 
-  // 1) EPS futuro × P/L médio histórico da própria empresa.
-  const fwdEps = trend?.eps_current ?? (price && f?.forward_pe ? price / f.forward_pe : null);
-  if (fwdEps && fwdEps > 0 && f?.pe_5y_avg) {
-    est.push({ method: "EPS projetado × P/L médio 5 anos", value: fwdEps * f.pe_5y_avg, source: `${f.meta.source} (múltiplos) + estimativas` });
+  // P/L de referência: histórico da própria empresa (mediana anual), com teto. Anos de
+  // lucro deprimido inflam a média (ex.: NVDA) e levariam a um "valor justo" irreal.
+  const refPe = f?.pe_5y_avg ? Math.min(f.pe_5y_avg, PE_CAP) : null;
+  const capped = !!f?.pe_5y_avg && f.pe_5y_avg > PE_CAP;
+  // 1) EPS do ano fiscal corrente (não o ano seguinte — evita somar otimismo) × P/L de referência.
+  const fwdEps = trend?.eps_fy0 ?? (price && f?.forward_pe ? price / f.forward_pe : null);
+  if (fwdEps && fwdEps > 0 && refPe) {
+    est.push({ method: `EPS estimado do ano × P/L histórico ${refPe.toFixed(0)}x${capped ? " (teto)" : ""}`, value: fwdEps * refPe, source: `${f!.meta.source} (múltiplos) + estimativas` });
   }
   // 2) Preço-alvo médio de analistas (horizonte 12 meses — não é fair value intrínseco).
   if (analysts?.target_mean) {
     est.push({ method: "Preço-alvo médio de analistas (12m)", value: analysts.target_mean, source: analysts.meta.source });
   }
-  // 3) EPS dos últimos 12 meses × P/L médio 5 anos (base realizada, não projetada).
-  if (f?.eps_ttm && f.eps_ttm > 0 && f.pe_5y_avg) {
-    est.push({ method: "EPS 12m × P/L médio 5 anos", value: f.eps_ttm * f.pe_5y_avg, source: f.meta.source });
+  // 3) EPS dos últimos 12 meses × P/L de referência (base realizada, não projetada).
+  if (f?.eps_ttm && f.eps_ttm > 0 && refPe) {
+    est.push({ method: `EPS 12m × P/L histórico ${refPe.toFixed(0)}x${capped ? " (teto)" : ""}`, value: f.eps_ttm * refPe, source: f.meta.source });
   }
 
   if (est.length < 2) {
     return { ...empty(est.length === 1 ? "Fair value indisponível — apenas uma estimativa encontrada (mínimo 2)." : "Fair value indisponível."), estimates: est };
   }
   const vals = est.map((e) => e.value);
-  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  // Mediana com 3 métodos: um método fora da curva não puxa a faixa.
+  const sorted = [...vals].sort((a, b) => a - b);
+  const mean = sorted.length === 3 ? sorted[1] : vals.reduce((a, b) => a + b, 0) / vals.length;
   const min = Math.min(...vals), max = Math.max(...vals);
   const spread = ((max - min) / mean) * 100;
   if (spread > 80) {
     return { ...empty("Os dados disponíveis são conflitantes — estimativas de fair value divergem mais de 80%."), estimates: est, min, mean, max, uncertainty_pct: spread };
+  }
+  // Desconto/prêmio extremo em empresa grande quase sempre é dado ruim, não oportunidade.
+  if (price && (price / mean < PLAUSIBLE[0] || price / mean > PLAUSIBLE[1])) {
+    return { ...empty(`Valor justo calculado (US$ ${mean.toFixed(2)}) está longe demais do preço (US$ ${price.toFixed(2)}) para ser confiável — sem faixa até os dados confirmarem.`), estimates: est, min, mean, max, uncertainty_pct: spread };
   }
   return {
     estimates: est, min, mean, max,

@@ -13,6 +13,8 @@ export interface BoardRow {
   /** Peso hoje e meta, em % da carteira. */
   current: number | null;
   target: number;
+  price: number | null;
+  cur: "US$" | "R$";
   /** Motivo curto (por que recebe ou por que espera). */
   note: string;
   /** Valuation completo, aberto só quando a linha é expandida. */
@@ -29,6 +31,20 @@ const PRIORITY_LABEL: Record<Priority, string> = { ALTA: "Alta · oportunidade",
 export function priorityFromStance(a: ActionKey | null | undefined, current: number | null, target: number): Priority {
   if (current !== null && target > 0 && current >= target) return "BAIXA";
   return a === "comprar" || a === "recompra" ? "ALTA" : a === "manter" ? "MÉDIA" : "BAIXA";
+}
+
+const money = (cur: string, v: number) => `${cur} ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Quando comprar: preço de entrada pelas faixas de valuation (não é previsão de preço). */
+export function buyTiming(stance: Stance | null, price: number | null, cur: string): string | null {
+  if (!stance || !price || stance.bands.length < 5 || stance.action === "legado") return null;
+  const strong = stance.bands[0].high!, buy = stance.bands[1].high!;
+  const fall = (to: number) => `${((1 - to / price) * 100).toFixed(0)}%`;
+  if (stance.thesis === "deteriorada") return "Esperar a tese se confirmar antes de qualquer compra, mesmo com preço baixo.";
+  if (price < buy) return price < strong
+    ? `Agora: preço na faixa de compra forte (abaixo de ${money(cur, strong)}). Bom momento para aportar, em partes.`
+    : `Agora: na faixa de compra (até ${money(cur, buy)}). Abaixo de ${money(cur, strong)} vira compra forte.`;
+  return `Comprar abaixo de ${money(cur, buy)} (precisa cair ${fall(buy)}); compra forte abaixo de ${money(cur, strong)}.`;
 }
 
 /** Motivo curto para quem espera por estar na meta ou acima. */
@@ -63,6 +79,7 @@ export default function WhereBoard({ rows }: { rows: BoardRow[] }) {
                 </div>
               </div>
               <div className="xsmall muted where-note">{r.note}</div>
+              {buyTiming(r.stance, r.price, r.cur) && <div className="xsmall where-note"><strong>Quando comprar:</strong> {buyTiming(r.stance, r.price, r.cur)}</div>}
             </summary>
             <div className="why">{r.detail}</div>
           </details>

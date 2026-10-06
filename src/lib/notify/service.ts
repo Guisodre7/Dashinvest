@@ -125,7 +125,8 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
     ...brCandidates(br.summary), ...macroCandidates(ctx.macro),
   ];
   const history = await repo.notificationHistory(30);
-  const decisions = decide(candidates, prefs, history, now);
+  const firstRun = history.length === 0 && !(await repo.getSetting(STATUS_KEY).catch(() => null));
+  const decisions = decide(candidates, prefs, history, now, firstRun);
 
   // Avisos guardados durante o silêncio: tocam na primeira rodada depois dele.
   let released = 0;

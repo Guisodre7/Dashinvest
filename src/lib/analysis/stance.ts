@@ -175,7 +175,6 @@ export function computeStance(i: StanceInput): Stance {
   }
 
   const held = !!i.position && i.position.quantity > 0;
-  const overweight = i.weight !== null && (i.maxWeight !== null ? i.weight > i.maxWeight : i.weight > i.target * 1.25);
   const aboveTarget = i.weight !== null && i.weight > i.target;
   const good = quality === "excelente" || quality === "boa";
   let action: ActionKey;
@@ -191,13 +190,15 @@ export function computeStance(i: StanceInput): Stance {
         : "Sinais de deterioração da tese: não aumentar a posição.";
     }
   } else if (band === "extremo") {
+    // Venda só por preço (bem acima do valor justo), nunca só para reequilibrar.
     if (!held) { action = "evitar"; headline = "Valuation extremamente esticado: não é ponto de entrada."; }
-    else if (good && aboveTarget) { action = "realizacao"; headline = "Empresa continua boa, mas o valuation está extremamente esticado e a posição pesa acima da meta: avaliar realização parcial."; }
-    else if (!good && quality !== "sem dados") { action = "reduzir"; headline = "Valuation extremamente esticado com qualidade apenas mediana/fraca: avaliar redução relevante."; }
-    else { action = "nao_aumentar"; headline = "Valuation extremamente esticado, mas a posição está dentro da meta: manter sem aumentar."; }
+    else if (rally === "justificada") { action = "nao_aumentar"; headline = "Preço bem acima do valor justo, mas a alta vem acompanhada de lucros subindo: manter sem aumentar e reavaliar no próximo resultado."; }
+    else if (good) { action = "realizacao"; headline = `Empresa continua boa, mas o preço está ${fmt(premiumPct, 0)}% acima do valor justo: avaliar vender uma parte e recomprar mais barato.`; }
+    else if (quality !== "sem dados") { action = "reduzir"; headline = `Preço ${fmt(premiumPct, 0)}% acima do valor justo com qualidade apenas mediana/fraca: avaliar redução relevante.`; }
+    else { action = "nao_aumentar"; headline = "Valuation extremamente esticado, sem dados de qualidade para sugerir venda: manter sem aumentar."; }
   } else if (band === "esticado") {
-    if (held && good && overweight && rally !== "justificada") { action = "realizacao"; headline = "Valuation esticado e posição acima do peso máximo: uma realização pequena reduz a concentração sem abandonar a tese."; }
-    else { action = "nao_aumentar"; headline = rally === "justificada" ? "A alta parece acompanhada por melhora dos fundamentos, mas o preço já está acima do valor justo: manter sem aumentar." : "Empresa pode ser boa, mas o valuation exige cautela: manter sem aumentar."; }
+    // Um pouco acima do valor justo: não compra mais, mas também não vende (jogo de longo prazo).
+    action = "nao_aumentar"; headline = rally === "justificada" ? "A alta parece acompanhada por melhora dos fundamentos, mas o preço já está acima do valor justo: manter sem aumentar." : "Empresa pode ser boa, mas o preço está acima do valor justo: manter sem aumentar (não vender por isso).";
   } else if (band === "justo") {
     action = "manter"; headline = aboveTarget ? "Preço razoável; posição acima da meta — aportes podem ir para outros ativos." : "Preço razoável: pode manter e aportar normalmente.";
   } else {
@@ -212,10 +213,8 @@ export function computeStance(i: StanceInput): Stance {
   let realization: Stance["realization"] = null;
   if ((action === "realizacao" || action === "reduzir") && i.position && i.weight !== null) {
     const pos = i.position;
-    let [lo, hi] = action === "reduzir" ? [20, 35] : band === "extremo" ? (overweight ? [20, 30] : [10, 20]) : [5, 10];
-    // Não vende abaixo do peso-alvo.
-    const maxPct = i.weight > 0 ? Math.max(0, (1 - i.target / i.weight) * 100) : 0;
-    hi = Math.min(hi, Math.floor(maxPct)); lo = Math.min(lo, hi);
+    // Tamanho pela distância do valor justo — o peso na carteira não decide venda.
+    const [lo, hi] = action === "reduzir" ? [20, 35] : premiumPct > 50 ? [20, 30] : [10, 20];
     const shares = (p: number) => Math.floor(pos.quantity * p / 100 * 1e4) / 1e4;
     const valueHigh = r2(shares(hi) * i.price);
     const gainPerShare = i.price - pos.avgCost;
@@ -225,7 +224,7 @@ export function computeStance(i: StanceInput): Stance {
     const fees = i.tax.feePerOrder;
     const efficient = hi > 0 && valueHigh >= i.tax.minTicket && (estTax + fees) / Math.max(valueHigh, 1) <= 0.1;
     const note = !efficient
-      ? hi === 0 ? "A posição já está perto da meta: realizar não reduziria concentração." : `Venda pequena demais ou custos/impostos altos (${i.currency} ${fmt(estTax + fees)} sobre ${i.currency} ${fmt(valueHigh)}): manter sem aumentar é mais eficiente.`
+      ? `Venda pequena demais ou custos/impostos altos (${i.currency} ${fmt(estTax + fees)} sobre ${i.currency} ${fmt(valueHigh)}): manter sem aumentar é mais eficiente.`
       : `Faixa sugerida para avaliação, não ordem. Imposto estimado ${i.currency} ${fmt(estTax)}${exempt ? " (dentro da isenção mensal)" : ""} + custos ${i.currency} ${fmt(fees)}. ${i.tax.note}`;
     realization = { pctLow: lo, pctHigh: hi, sharesLow: shares(lo), sharesHigh: shares(hi), valueLow: r2(shares(lo) * i.price), valueHigh, estGain, estTax, fees, efficient, note };
     if (!efficient) { action = "nao_aumentar"; reasons.push(note); }

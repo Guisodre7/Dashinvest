@@ -120,9 +120,10 @@ export class FinnhubProvider implements MarketDataProvider {
     if (!Object.keys(m).length) throw new ProviderUnavailableError(NAME, "fundamentals", ticker);
     const annualPe = data.series?.annual?.pe ?? [];
     const annualPs = data.series?.annual?.ps ?? [];
+    // Mediana dos últimos 5 anos: um ano de lucro deprimido (P/L 100x+) não distorce a referência.
     const avg = (arr: { v: number }[]) => {
-      const last = arr.slice(0, 5).map((x) => x.v).filter((v) => Number.isFinite(v) && v > 0);
-      return last.length >= 3 ? last.reduce((a, b) => a + b, 0) / last.length : null;
+      const last = arr.slice(0, 5).map((x) => x.v).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+      return last.length >= 3 ? (last.length % 2 ? last[(last.length - 1) / 2] : (last[last.length / 2 - 1] + last[last.length / 2]) / 2) : null;
     };
     const pfcf = toNum(m.pfcfShareTTM);
     return {

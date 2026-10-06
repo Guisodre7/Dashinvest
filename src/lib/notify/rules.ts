@@ -128,14 +128,16 @@ const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Americ
  *  - mesmo estado já avisado dentro do cooldown → descartado, salvo se a prioridade SUBIU (mudança material);
  *  - horário de silêncio → fica na central ("quiet") e não toca, exceto crítico (se permitido);
  *  - push desligado → só na central ("in_app");
- *  - teto diário de pushes não críticos → excedente só na central.
+ *  - teto diário de pushes não críticos → excedente só na central;
+ *  - primeira rodada (sem histórico) → só na central, sem rajada de pushes.
  */
-export function decide(candidates: Candidate[], prefs: NotifyPrefs, history: SentRecord[], now = new Date()): Decision[] {
+export function decide(candidates: Candidate[], prefs: NotifyPrefs, history: SentRecord[], now = new Date(), firstRun = false): Decision[] {
   const seen = new Set<string>();
   const quiet = inQuietHours(now, prefs.quiet);
   const today = dayKey(now);
   let pushedToday = history.filter((h) => h.delivery === "sent" && h.priority !== "critical" && dayKey(new Date(h.created_at)) === today).length;
 
+  // Primeira rodada do monitor: tudo é "estado atual", não novidade — vai só para a central.
   const sorted = [...candidates].sort((a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority]);
   const out: Decision[] = [];
   for (const c of sorted) {
@@ -157,6 +159,7 @@ export function decide(candidates: Candidate[], prefs: NotifyPrefs, history: Sen
     if (!prefs.pushEnabled) delivery = "in_app";
     else if (quiet && !(c.priority === "critical" && prefs.quiet.allowCritical)) delivery = "quiet";
     else if (c.priority === "info") delivery = "in_app";
+    else if (firstRun && c.priority !== "critical") delivery = "in_app";
     else if (c.priority !== "critical" && pushedToday >= prefs.dailyLimit) delivery = "in_app";
     if (delivery === "sent" && c.priority !== "critical") pushedToday++;
     out.push({ ...c, delivery, group_key: null });

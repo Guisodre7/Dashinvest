@@ -12,6 +12,8 @@ export type EstimateDirection = "rising" | "stable" | "falling" | "unknown";
 export interface EstimateTrend {
   period: string | null;
   eps_current: number | null;
+  /** EPS estimado do ano fiscal corrente (base mais próxima de "12 meses à frente"). */
+  eps_fy0: number | null;
   eps_rev_30d: number | null;
   eps_rev_90d: number | null;
   revenue_rev_30d: number | null;
@@ -47,7 +49,7 @@ function historicalValue(history: StoredEstimate[], period: string, daysAgo: num
 
 export function estimateTrend(est: EarningsEstimates | null, history: StoredEstimate[] = []): EstimateTrend {
   const empty: EstimateTrend = {
-    period: null, eps_current: null, eps_rev_30d: null, eps_rev_90d: null,
+    period: null, eps_current: null, eps_fy0: null, eps_rev_30d: null, eps_rev_90d: null,
     revenue_rev_30d: null, revenue_rev_90d: null, direction: "unknown", significant_cut: false,
     basis: "none", expected_eps_growth: null, expected_revenue_growth: null,
     last_surprise_pct: null, avg_surprise_pct: null,
@@ -61,6 +63,7 @@ export function estimateTrend(est: EarningsEstimates | null, history: StoredEsti
   out.avg_surprise_pct = surprises.length ? surprises.slice(0, 4).reduce((a, b) => a + b, 0) / Math.min(4, surprises.length) : null;
 
   const cy = est.periods.find((p) => p.period === "0y"), ny = est.periods.find((p) => p.period === "+1y");
+  out.eps_fy0 = cy?.eps_avg ?? null;
   if (cy?.eps_avg && ny?.eps_avg && cy.eps_avg > 0) out.expected_eps_growth = pct(ny.eps_avg, cy.eps_avg);
   if (cy?.revenue_avg && ny?.revenue_avg) out.expected_revenue_growth = pct(ny.revenue_avg, cy.revenue_avg);
 

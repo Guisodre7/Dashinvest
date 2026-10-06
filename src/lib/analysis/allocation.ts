@@ -211,9 +211,16 @@ export function allocate(input: AllocationInput): AllocationResult {
     let action: Action = w.action ?? (amount <= 0 ? "AGUARDAR" : share >= normalShare * 1.15 && (w.a.opportunity.score ?? 50) >= 55 ? "COMPRAR" : "APORTE NORMAL");
     if (amount > 0 && action === "AGUARDAR") action = "APORTE NORMAL";
     const st = input.stances?.[w.a.ticker];
-    if (amount > 0 && (st === "comprar" || st === "recompra")) action = "COMPRAR";
     const s = w.a.opportunity.score ?? 50;
-    const priority: Priority = action === "AGUARDAR" ? "BAIXA" : action === "COMPRAR" || (s >= 62 && w.a.gap > 0) ? "ALTA" : "MÉDIA";
+    let priority: Priority;
+    if (input.stances) {
+      // Com valuation: alta = oportunidade pelo valuation; o resto que recebe é aporte normal.
+      const opp = st === "comprar" || st === "recompra";
+      if (amount > 0) action = opp ? "COMPRAR" : "APORTE NORMAL";
+      priority = action === "AGUARDAR" ? "BAIXA" : opp ? "ALTA" : "MÉDIA";
+    } else {
+      priority = action === "AGUARDAR" ? "BAIXA" : action === "COMPRAR" || (s >= 62 && w.a.gap > 0) ? "ALTA" : "MÉDIA";
+    }
     const { why, favorable, risks, dataUsed } = explain(w.a, action, amount, w.reasons);
     return {
       ticker: w.a.ticker, name: w.a.name, bucket: w.a.strategy.strategy_bucket, amount, share, action, priority,

@@ -222,6 +222,7 @@ export default function NotificationBell() {
             </>
           )}
           {msg && <p className={`small ${msg.ok ? "pos" : "neg"}`} role="status">{msg.text}</p>}
+          <Link href="/notificacoes" className="btn btn-primary" onClick={() => setOpen(false)}>Abrir central de notificações{st?.unread ? ` (${st.unread} não lidas)` : ""}</Link>
         </div>
       )}
     </div>
