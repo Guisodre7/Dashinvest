@@ -59,6 +59,30 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - Os arquivos do motor (~16 MB, baixados uma vez e guardados em cache) são copiados para `public/ocr` por `scripts/copy-ocr-assets.mjs` antes do `dev`/`build`, e servidos pelo próprio site.
 - Opcional: com `ANTHROPIC_API_KEY` configurada, aparece o botão "Tentar leitura com IA" quando a leitura local fica incompleta (`/api/ocr/trade`). Sem a chave, tudo funciona normalmente.
 
+## Valuation, realização parcial e recompra (`/oportunidades`, `/mudancas`)
+
+Princípio: separar **qualidade do ativo**, **valor (faixa de valuation)** e **preço pago**. Motor em `src/lib/analysis/stance.ts` (funções puras, testadas).
+
+- **Faixas** relativas ao valor justo médio (intervalo, nunca número exato):
+  - < 0,85: compra forte;
+  - 0,85–0,95: atrativo;
+  - 0,95–1,05: justo;
+  - 1,05–1,25: esticado;
+  - > 1,25: extremamente esticado.
+  - O valor justo vem do fair value multi-fonte ou, sem ele, do múltiplo histórico (confiança menor). ETFs sem valor justo e ativos da B3 sem fundamentos ficam em "Aguardar dados".
+- **Postura única** (a mesma em todas as telas e notificações), a partir de qualidade × faixa × tese × peso na carteira:
+  - comprar, recompra, manter, manter/não aumentar;
+  - realização parcial, reduzir;
+  - evitar, sair da tese (avaliar), aguardar dados, legado.
+  - Excelente + cara com peso pequeno = "não aumentar"; com peso acima da meta = realização **parcial** em faixa (nunca 100%), limitada para não ficar abaixo da meta.
+  - Barata com qualidade fraca ou tese deteriorada = evitar.
+  - Alta acompanhada por revisão de lucro ("justificada") × alta por expectativa.
+- **Custos e impostos** configuráveis (US 15% Lei 14.754; ações BR 15% com isenção de R$ 20 mil/mês; FIIs 20%; confirmar regras vigentes): venda pequena ou ineficiente vira "manter sem aumentar".
+- **Recompra**: após uma venda, faixas de recompra forte, normal e parcial (40/35/25% do vendido), aguardar, ainda esticado. Nunca com tese deteriorada.
+- **Escada** (página do ativo): degraus de venda e de recompra com cenário completo; o monitor avisa quando o preço atinge um degrau (recompra só depois de uma venda posterior ao plano).
+- **O que mudou?**: retrato diário de cada ativo em `app_settings.stance_history` (gravado pelo monitor). A comparação de 7/30/90 dias explica se mudou o preço, o valuation ou a tese.
+- **Lucro de verdade × no papel**: lucro realizado (vendas) separado do não realizado, do custo histórico e do valor da posição.
+
 ## Notificações no iPhone (Web Push, gratuito)
 
 "Monitorar muito, notificar pouco, explicar bem." Preço subindo ou caindo sozinho nunca gera push.

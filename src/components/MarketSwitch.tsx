@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 /** Seletor de carteira no topo: muda o contexto da interface. */
 export default function MarketSwitch() {
   const path = usePathname();
-  const US = ["/carteira", "/estrategia", "/projecao", "/relatorio", "/ativo"];
+  const US = ["/carteira", "/estrategia", "/projecao", "/relatorio", "/ativo", "/oportunidades", "/mudancas"];
   const current = path.startsWith("/brasil") ? "br" : path.startsWith("/geral") ? "all" : path === "/" || US.some((p) => path.startsWith(p)) ? "us" : null;
   const items = [
     { key: "br", href: "/brasil", label: "🇧🇷 Brasil" },

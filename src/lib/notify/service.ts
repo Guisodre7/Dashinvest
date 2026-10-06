@@ -5,7 +5,9 @@ import { serverConfig } from "../config";
 import { loadBrazil } from "../data/brazil";
 import { loadContext } from "../data/load";
 import type { NotificationRow, Repo } from "../db/repo";
-import { brCandidates, macroCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
+import { parseTaxSettings, usStances } from "../analysis/stanceInput";
+import { LADDER_KEY, recordStanceHistory, TAX_KEY, type Ladders } from "../data/stances";
+import { brCandidates, ladderCandidates, macroCandidates, stanceCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
 import { decide, groupPushes, inQuietHours, parsePrefs, type Candidate, type Decision, type NotifyPrefs, type PushMessage } from "./rules";
 
 export const PREFS_KEY = "notify_prefs";
@@ -102,7 +104,19 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   if (!(await repo.notifyReady())) return { ok: false, reason: "migração 0005 não aplicada" };
   const prefs = parsePrefs(await repo.getSetting(PREFS_KEY));
   const [ctx, br] = await Promise.all([loadContext(user, { repo }), loadBrazil(repo)]);
-  const candidates: Candidate[] = [...usCandidates(ctx.analyses, now), ...brCandidates(br.summary), ...macroCandidates(ctx.macro)];
+  const [transactions, rawTax, ladders] = await Promise.all([
+    repo.getTransactions(1000).catch(() => []), repo.getSetting(TAX_KEY).catch(() => null), repo.getSetting<Ladders>(LADDER_KEY).catch(() => null),
+  ]);
+  const stances = usStances(ctx.analyses, ctx.portfolio, transactions, parseTaxSettings(rawTax), now);
+  const prices = Object.fromEntries(ctx.analyses.map((a) => [a.ticker, a.price]));
+  await recordStanceHistory(repo, stances, prices, now).catch(() => undefined);
+  const candidates: Candidate[] = [
+    ...usCandidates(ctx.analyses, now), ...stanceCandidates(stances), ...ladderCandidates(ladders ?? {}, prices, {
+      held: (t) => (ctx.portfolio.positions.find((x) => x.ticker === t)?.quantity ?? 0) > 0,
+      lastSellDate: (t) => transactions.filter((x) => x.kind === "sell" && x.ticker === t).map((x) => x.trade_date).sort().pop() ?? null,
+    }),
+    ...brCandidates(br.summary), ...macroCandidates(ctx.macro),
+  ];
   const history = await repo.notificationHistory(30);
   const decisions = decide(candidates, prefs, history, now);
 

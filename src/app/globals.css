@@ -106,7 +106,9 @@ p { margin: 0; }
 .topbar-inner { max-width: 1280px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 20px; }
 .brand { font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
 .brand:hover { text-decoration: none; }
-.nav { display: flex; gap: 4px; flex: 1; }
+.nav { display: flex; gap: 4px; flex: 1; white-space: nowrap; }
+.nav .lbl-short { display: none; }
+@media (max-width: 1440px) { .nav .lbl-long { display: none; } .nav .lbl-short { display: inline; } }
 .nav a { padding: 8px 12px; border-radius: 8px; color: var(--text-2); touch-action: manipulation; }
 .nav a:hover { background: var(--surface-2); text-decoration: none; color: var(--text); }
 .nav a[aria-current="page"] { color: var(--text); background: var(--surface-2); }
@@ -189,6 +191,25 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--text-2); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+/* Valuation: faixas e posturas */
+.bandbar-wrap { display: flex; flex-direction: column; gap: 6px; }
+.bandbar { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); overflow: visible; }
+.band { position: absolute; top: 0; bottom: 0; opacity: .55; }
+.band.is-current { opacity: 1; }
+.band-forte { background: #1d6b4f; } .band-atrativo { background: #4c9a74; } .band-justo { background: #c9a227; }
+.band-esticado { background: #d9822b; } .band-extremo { background: #a23b2a; }
+.band-price { position: absolute; top: -4px; width: 3px; height: 20px; margin-left: -1px; background: var(--text); border-radius: 2px; }
+.band-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.band-legend .strong { font-weight: 700; }
+.ladder { width: 100%; font-size: 13px; }
+.ladder input { width: 100%; min-width: 70px; }
+.chip { padding: 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.callout { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.action-comprar, .action-recomprar { background: var(--pos-soft, #e3f1ea); color: var(--pos); }
+.action-realizar { background: #fbeadb; color: #9a4f12; }
+.action-evitar { background: var(--neg-soft, #f6e3df); color: var(--neg); }
+.action-manter, .action-aguardar { background: var(--surface-2); color: var(--text-2); }
+
 /* Sino de notificações */
 .bell { position: relative; }
 .bell-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; min-width: 40px; padding: 6px 10px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--text-2); cursor: pointer; touch-action: manipulation; }

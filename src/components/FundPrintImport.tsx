@@ -98,7 +98,7 @@ export default function FundPrintImport() {
             <dt>Valor atual</dt><dd>{brl(plan.before?.value ?? 0)} → {brl(plan.after.value)}</dd>
             <dt>Variação</dt><dd>{(plan.after.value - (plan.before?.value ?? 0)) >= 0 ? "+" : ""}{brl(plan.after.value - (plan.before?.value ?? 0))}</dd>
           </dl>
-          <ul className="clean small">{plan.changes.map((c) => <li key={c}>• {c}</li>)}</ul>
+          <ul className="clean small">{plan.changes.map((c) => <li key={c}>{c}</li>)}</ul>
           {plan.blocker && <p className="small neg">{plan.blocker}</p>}
           {plan.nothingChanged && <p className="small muted">Nada mudou desde o último print.</p>}
           {!plan.blocker && !plan.nothingChanged && (

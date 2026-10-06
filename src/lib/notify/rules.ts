@@ -14,8 +14,8 @@ export type Delivery = "sent" | "quiet" | "in_app" | "failed" | "test";
 export const CATEGORY_META: Record<NotifyCategory, { label: string; emoji: string; tab: NotifyTab; defaultOn: boolean; cooldownH: number; available: boolean }> = {
   opportunity: { label: "Oportunidade de compra", emoji: "🟢", tab: "compras", defaultOn: true, cooldownH: 7 * 24, available: true },
   valuation: { label: "Valuation esticado", emoji: "🟠", tab: "vendas", defaultOn: true, cooldownH: 7 * 24, available: true },
-  realization: { label: "Possível realização", emoji: "🔴", tab: "vendas", defaultOn: true, cooldownH: 7 * 24, available: false },
-  rebuy: { label: "Recompra", emoji: "🟢", tab: "compras", defaultOn: true, cooldownH: 7 * 24, available: false },
+  realization: { label: "Possível realização", emoji: "🔴", tab: "vendas", defaultOn: true, cooldownH: 7 * 24, available: true },
+  rebuy: { label: "Recompra", emoji: "🟢", tab: "compras", defaultOn: true, cooldownH: 7 * 24, available: true },
   news: { label: "Notícia relevante", emoji: "🔵", tab: "noticias", defaultOn: true, cooldownH: 0, available: true },
   thesis: { label: "Mudança de tese", emoji: "🟣", tab: "teses", defaultOn: true, cooldownH: 3 * 24, available: true },
   portfolio: { label: "Alerta de carteira", emoji: "🟡", tab: "carteira", defaultOn: true, cooldownH: 7 * 24, available: true },

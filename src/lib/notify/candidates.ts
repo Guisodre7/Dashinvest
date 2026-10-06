@@ -1,4 +1,5 @@
 import type { AssetAnalysis } from "../analysis/analyze";
+import type { Stance } from "../analysis/stance";
 import type { MacroIndicator } from "../market/types";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
 import type { Candidate } from "./rules";
@@ -150,3 +151,70 @@ export const TEST_CANDIDATE: Candidate = {
   category: "market", priority: "high", market: null, ticker: null, url: "/notificacoes", key: "TEST",
   title: "🔔 DashInvest conectado", body: "As notificações estão funcionando corretamente.", reason: "Teste manual",
 };
+
+const money = (v: number) => `US$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Postura de valuation: realização parcial / redução / recompra. */
+export function stanceCandidates(stances: Stance[]): Candidate[] {
+  const out: Candidate[] = [];
+  for (const s of stances) {
+    const url = `/ativo/${encodeURIComponent(s.ticker)}#realizacao`;
+    if ((s.action === "realizacao" || s.action === "reduzir") && s.realization) {
+      const r = s.realization;
+      out.push({
+        category: "realization", priority: "high", market: "US", ticker: s.ticker, url, key: `${s.ticker}:realization:${s.action}`,
+        title: s.action === "reduzir" ? `Avaliar redução: ${s.ticker}` : `Valuation esticado: ${s.ticker}`,
+        body: `${s.headline} Faixa sugerida para avaliação: ${r.pctLow}%–${r.pctHigh}% da posição (${money(r.valueLow)}–${money(r.valueHigh)}). Imposto estimado ${money(r.estTax)}. Não é ordem.`,
+        publicBody: `${s.ticker} continua com fundamentos ${s.quality === "excelente" || s.quality === "boa" ? "sólidos" : "a acompanhar"}, mas o valuation entrou em faixa esticada. Avaliar realização parcial.`,
+        reason: `Postura ${s.action} · faixa ${s.band} · qualidade ${s.quality} · tese ${s.thesis}`,
+      });
+    }
+    if (s.action === "recompra" && s.rebuy) {
+      out.push({
+        category: "rebuy", priority: "high", market: "US", ticker: s.ticker, url, key: `${s.ticker}:rebuy`,
+        title: `Possível recompra: ${s.ticker}`,
+        body: `${s.ticker} retornou à faixa de valuation considerada interessante. Fundamentos permanecem preservados. Venda anterior a ${money(s.rebuy.sellPrice)}; preço ${s.rebuy.dropFromSellPct.toFixed(1).replace(".", ",")}% em relação à venda. Recompra em degraus.`,
+        publicBody: `${s.ticker} retornou à faixa de valuation considerada interessante. Fundamentos permanecem preservados.`,
+        reason: `Postura recompra · faixa ${s.band} · tese ${s.thesis}`,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Degraus da estratégia de escada atingidos pelo preço atual.
+ * Venda: só com posição. Recompra: só depois de uma venda feita após salvar o plano.
+ */
+export function ladderCandidates(
+  ladders: Record<string, { sell: { price: number; pct: number }[]; rebuy: { price: number; pct: number }[]; updated_at?: string }>,
+  prices: Record<string, number | null>,
+  ctx: { held: (ticker: string) => boolean; lastSellDate: (ticker: string) => string | null },
+): Candidate[] {
+  const out: Candidate[] = [];
+  for (const [t, l] of Object.entries(ladders)) {
+    const p = prices[t];
+    if (!p) continue;
+    const planDay = (l.updated_at ?? "").slice(0, 10);
+    const sold = ctx.lastSellDate(t);
+    const canRebuy = !!sold && sold >= planDay;
+    const url = `/ativo/${encodeURIComponent(t)}#realizacao`;
+    const sellHit = ctx.held(t) ? [...l.sell].filter((x) => p >= x.price).sort((a, b) => b.price - a.price)[0] : undefined;
+    if (sellHit) out.push({
+      category: "realization", priority: "high", market: "US", ticker: t, url, key: `${t}:ladder:sell:${sellHit.price}`,
+      title: `Degrau de venda atingido: ${t}`,
+      body: `Preço ${money(p)} chegou ao degrau de ${money(sellHit.price)} do seu plano (vender ~${sellHit.pct}% da posição). Reavalie valuation e tese antes de decidir.`,
+      publicBody: `${t} chegou a um degrau de venda do seu plano. Toque para ver a análise.`,
+      reason: "Estratégia de escada (plano salvo)",
+    });
+    const rebuyHit = canRebuy ? [...l.rebuy].filter((x) => p <= x.price).sort((a, b) => a.price - b.price)[0] : undefined;
+    if (rebuyHit) out.push({
+      category: "rebuy", priority: "high", market: "US", ticker: t, url, key: `${t}:ladder:rebuy:${rebuyHit.price}`,
+      title: `Degrau de recompra atingido: ${t}`,
+      body: `Preço ${money(p)} chegou ao degrau de ${money(rebuyHit.price)} do seu plano (recomprar ~${rebuyHit.pct}% do vendido). Confirme se a tese segue preservada.`,
+      publicBody: `${t} chegou a um degrau de recompra do seu plano. Toque para ver a análise.`,
+      reason: "Estratégia de escada (plano salvo)",
+    });
+  }
+  return out;
+}

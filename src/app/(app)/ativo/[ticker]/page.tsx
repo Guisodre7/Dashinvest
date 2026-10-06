@@ -3,11 +3,14 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { LiveChange, LiveFreshness, LivePrice, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LivePositionValue } from "@/components/LivePortfolio";
+import LadderPlanner from "@/components/LadderPlanner";
 import PriceChart from "@/components/PriceChart";
+import StanceCard from "@/components/StanceCard";
 import StaleRefresher from "@/components/StaleRefresher";
 import { Kpi, ScoreBadge } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { LADDER_KEY, loadStances, type Ladders } from "@/lib/data/stances";
 import { compact, dateBr, dateTimeEt, n, pct, pp, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 import { getMarketDataProvider } from "@/lib/market";
@@ -24,11 +27,14 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   if (!a) notFound();
 
   const provider = getMarketDataProvider();
-  const [etfProfile, dividends, lastRec] = await Promise.all([
+  const [etfProfile, dividends, lastRec, st, ladders] = await Promise.all([
     a.isEtf ? provider.getEtfProfile(ticker).catch(() => null) : null,
     provider.getDividends(ticker).catch(() => null),
     ctx.repo.getLatestRecommendation().catch(() => null),
+    loadStances(ctx, ctx.repo),
+    ctx.repo.getSetting<Ladders>(LADDER_KEY).catch(() => null),
   ]);
+  const stance = st.stances.find((x) => x.ticker === ticker)!;
   const position = ctx.portfolio.positions.find((p) => p.ticker === ticker);
   const recLine = lastRec?.lines.find((l) => l.ticker === ticker);
   const q = a.quote;
@@ -82,6 +88,16 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
         <Kpi label="Peso atual / alvo" value={`${n(a.currentWeight, 2)}% / ${n(a.targetWeight, 2)}%`} sub={a.strategy.is_legacy ? "posição legada — fora dos aportes" : `desvio ${pp(a.gap)}`} />
         <Kpi label="Aporte sugerido" value={recLine ? (recLine.amount > 0 ? usd(recLine.amount) : "Aguardar") : "—"} sub={recLine ? `${recLine.action} · cálculo de ${new Date(lastRec!.generatedAt).toLocaleString("pt-BR")}` : "calcule o aporte no painel"} />
         <Kpi label="Retorno" value={pct(position?.assetReturn, 1, true)} cls={tone(position?.assetReturn)} sub={position ? `câmbio ${pct(position.fxReturn, 1, true)} · total BRL ${pct(position.totalReturnBrl, 1, true)}` : undefined} />
+      </section>
+
+      <section className="section grid grid-2">
+        <StanceCard s={stance} price={lastPrice} name={a.name}
+          position={position && position.quantity > 0 ? { quantity: position.quantity, avgCost: position.costUsd / position.quantity, value: position.valueUsd, realized: st.realizedByTicker[ticker] ?? 0 } : null} />
+        {position && position.quantity > 0 && lastPrice && !a.strategy.is_legacy ? (
+          <LadderPlanner ticker={ticker} price={lastPrice} fairMean={stance.bands.length ? stance.bands[2].low! / 0.95 : null}
+            quantity={position.quantity} avgCost={position.costUsd / position.quantity} fee={st.tax.US.feePerOrder} taxRate={st.tax.US.gainTaxRate}
+            saved={ladders?.[ticker] ?? null} />
+        ) : <div className="card small muted">{a.strategy.is_legacy ? "Posição legada: fora de planos de venda/recompra." : "Sem posição: a escada de venda e recompra fica disponível quando houver cotas."}</div>}
       </section>
 
       <section className="section card">

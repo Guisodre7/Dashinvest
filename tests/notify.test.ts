@@ -57,8 +57,9 @@ describe("regras de notificação", () => {
     expect(decide([cand()], DEFAULT_PREFS, [], day)[0].delivery).toBe("in_app");
   });
 
-  it("realização/recompra ainda indisponíveis (dependem da camada de valuation)", () => {
-    expect(decide([cand({ category: "realization", key: "R" })], on, [], day)).toHaveLength(0);
+  it("realização e recompra são categorias ativas (desligáveis)", () => {
+    expect(decide([cand({ category: "realization", key: "R" })], on, [], day)).toHaveLength(1);
+    expect(decide([cand({ category: "rebuy", key: "R" })], { ...on, categories: { ...on.categories, rebuy: false } }, [], day)).toHaveLength(0);
   });
 
   it("teto diário: excedente vai só para a central; crítico sempre passa", () => {
@@ -129,5 +130,33 @@ describe("candidatos", () => {
     const m = (change_1m: number) => [{ key: "US10Y", label: "", value: 4.6, change: 0, change_pct: null, change_1m, unit: "percent", proxy: null, meta: null }] as never;
     expect(macroCandidates(m(0.2))).toHaveLength(0);
     expect(macroCandidates(m(0.6))[0].title).toMatch(/subiram 0,60 p\.p\./);
+  });
+});
+
+describe("candidatos de valuation e escada", async () => {
+  const { stanceCandidates, ladderCandidates } = await import("@/lib/notify/candidates");
+  const { computeStance, DEFAULT_TAX } = await import("@/lib/analysis/stance");
+  const st = (over: object) => computeStance({
+    ticker: "META", isEtf: false, isLegacy: false, price: 104, fair: { low: 70, mean: 80, high: 90, basis: "fair-value" },
+    qualityScore: 82, qualityCoverage: 0.9, signalKinds: [], estimates: { direction: "stable", significantCut: false, epsRev90d: 0 },
+    priceChange6m: 5, weight: 30, target: 10, maxWeight: 15, position: { quantity: 100, avgCost: 60, value: 10400 }, lastSell: null,
+    tax: DEFAULT_TAX.US, currency: "US$", ...over,
+  });
+  it("realização parcial e recompra viram notificações com deep link para a análise", () => {
+    const r = stanceCandidates([st({})]);
+    expect(r[0]).toMatchObject({ category: "realization", title: "Valuation esticado: META", url: "/ativo/META#realizacao" });
+    expect(r[0].publicBody).toMatch(/Avaliar realização parcial/);
+    const b = stanceCandidates([st({ price: 66, weight: 8, lastSell: { date: "2026-03-01", price: 100, quantity: 20 } })]);
+    expect(b[0]).toMatchObject({ category: "rebuy", title: "Possível recompra: META" });
+  });
+  it("degraus da escada: venda só com posição; recompra só depois de vender", () => {
+    const l = { META: { sell: [{ price: 700, pct: 10 }, { price: 800, pct: 10 }], rebuy: [{ price: 550, pct: 25 }], updated_at: "2026-09-01T10:00:00Z" } };
+    const ctx = (held: boolean, sold: string | null) => ({ held: () => held, lastSellDate: () => sold });
+    expect(ladderCandidates(l, { META: 720 }, ctx(true, null)).map((c) => c.key)).toEqual(["META:ladder:sell:700"]);
+    expect(ladderCandidates(l, { META: 720 }, ctx(false, null))).toHaveLength(0);
+    expect(ladderCandidates(l, { META: 540 }, ctx(true, null))).toHaveLength(0); // nunca vendeu
+    expect(ladderCandidates(l, { META: 540 }, ctx(true, "2026-08-01"))).toHaveLength(0); // venda antes do plano
+    expect(ladderCandidates(l, { META: 540 }, ctx(true, "2026-09-10")).map((c) => c.key)).toEqual(["META:ladder:rebuy:550"]);
+    expect(ladderCandidates(l, { META: 600 }, ctx(true, "2026-09-10"))).toHaveLength(0);
   });
 });
