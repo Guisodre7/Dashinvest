@@ -5,10 +5,13 @@ import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
 import LedgerForm from "@/components/LedgerForm";
+import MovementTabs from "@/components/MovementTabs";
 import { Kpi, WeightBar } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
 import { loadBrStances } from "@/lib/data/brStances";
+import { allocateBr } from "@/lib/allocation/brAllocate";
+import { parseUserNumber } from "@/lib/userNumber";
 import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, pp, tone } from "@/lib/format";
@@ -16,20 +19,20 @@ import { humanAge } from "@/lib/market/freshness";
 import { CLASS_LABEL, KIND_LABEL, PRICED } from "@/lib/portfolio/ledger";
 import { registerEntry, saveBrStrategy, undoEntry } from "./actions";
 
-const BR_TABS = [
-  { key: "resumo", label: "Resumo" }, { key: "valuation", label: "Valuation" },
-  { key: "movimentar", label: "Movimentar" }, { key: "estrategia", label: "Estratégia" },
-] as const;
+// Abas navegadas pelo submenu da carteira (mesmo padrão do Internacional).
+const BR_TABS = [{ key: "resumo" }, { key: "aporte" }, { key: "posicoes" }, { key: "movimentar" }, { key: "valuation" }, { key: "estrategia" }] as const;
 type BrTab = (typeof BR_TABS)[number]["key"];
 
-export default async function BrasilPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
-  const { aba } = await searchParams;
+export default async function BrasilPage({ searchParams }: { searchParams: Promise<{ aba?: string; valor?: string }> }) {
+  const { aba, valor } = await searchParams;
   const tab: BrTab = BR_TABS.some((t) => t.key === aba) ? (aba as BrTab) : "resumo";
   const user = await requireUser();
   const repo = await getRepo(user.id);
   const br = await loadBrazil(repo);
   // Fundamentos só quando a aba de valuation é aberta (mais rápido no resto).
-  const brs = tab === "valuation" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
+  const brs = tab === "valuation" || tab === "aporte" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
+  const aporteValor = parseUserNumber(valor);
+  const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? allocateBr(aporteValor, br.summary, br.strategy, brs.views) : null;
   const hist = tab === "valuation" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
   const brBuys = tab === "valuation" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
     const v = brs.views.find((x) => x.code === e.code);
@@ -60,7 +63,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
 
       <section className="hero">
         <div>
-          <div className="hero-title">🇧🇷 Carteira Brasil · <Link href="/analisar?mercado=BR">Analisar nova compra</Link> · <Link href="/teses">Minhas teses</Link></div>
+          <div className="hero-title">🇧🇷 Carteira Brasil</div>
           <div className="hero-value num">{brl(s.currentValue)}</div>
           <div className="row-wrap small muted">
             <span>Capital aportado líquido <strong className="num">{brl(s.netContributed)}</strong></span>
@@ -74,9 +77,6 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
 
-      <nav className="tabs dash-tabs" aria-label="Seções da carteira Brasil">
-        {BR_TABS.map((t) => <Link key={t.key} href={t.key === "resumo" ? "/brasil" : `/brasil?aba=${t.key}`} scroll={false} aria-current={tab === t.key ? "page" : undefined}>{t.label}</Link>)}
-      </nav>
 
       {tab === "resumo" && (
         <>
@@ -131,7 +131,42 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         </>
       )}
 
-      {tab === "resumo" && (
+      {tab === "aporte" && (
+        <section className="section stack">
+          <form className="card contrib" method="get">
+            <input type="hidden" name="aba" value="aporte" />
+            <div className="stack" style={{ gap: 4 }}>
+              <span className="small muted">Quanto vou aportar na carteira Brasil?</span>
+              <div className="money"><span>R$</span><input name="valor" inputMode="decimal" defaultValue={valor ?? ""} placeholder="3.000" aria-label="Valor do aporte em reais" /></div>
+            </div>
+            <button className="btn btn-primary" style={{ alignSelf: "flex-end", padding: "12px 20px" }}>CALCULAR APORTE</button>
+          </form>
+          <p className="xsmall faint">Não sabe quanto vai para o Brasil e quanto para o exterior? <Link href="/geral#plano">Plano do mês na Visão geral</Link>.</p>
+          {alloc && (
+            <div className="card stack">
+              <div className="kpi-label">Alocação sugerida pelo modelo · {brl(alloc.amount)}</div>
+              <ul className="decision-list">
+                {alloc.lines.map((l) => (
+                  <li key={l.label}>
+                    <span className="ticker">{l.label}</span>
+                    <span className="xsmall muted">{l.reason}</span>
+                    <strong className="num">{brl(l.amount)}</strong>
+                  </li>
+                ))}
+              </ul>
+              <p className="xsmall muted">Por classe: {alloc.classSplit.map((c) => `${c.why} → ${brl(c.amount)}`).join(" · ")}</p>
+              {alloc.notes.map((n) => <p key={n} className="xsmall muted">{n}</p>)}
+              <p className="xsmall faint">Melhor relação risco/retorno estimada no cenário atual — não é garantia de retorno. Nenhuma ordem é enviada.</p>
+              <div className="row-wrap">
+                <Link className="btn btn-sm" href="/brasil?aba=movimentar">Registrar as compras feitas</Link>
+                <Link className="btn btn-ghost btn-sm" href="/analisar?mercado=BR">Analisar um ativo antes</Link>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "posicoes" && (
         <>
       <section className="section">
         <div className="section-head"><h2>Posições</h2></div>
@@ -173,17 +208,20 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         <>
       {br.ready && (
         <section className="section">
-          <div className="section-head"><h2>Adicionar atualização da carteira</h2><span className="xsmall faint">print de fundo / renda fixa → confere → você confirma</span></div>
-          <div className="card"><FundPrintImport /></div>
-        </section>
-      )}
-
-      {br.ready && (
-        <section className="section">
-          <div className="section-head"><h2>Registrar movimentação</h2><span className="xsmall faint">Compra, venda, aporte, resgate, dividendo, rendimento ou saldo</span></div>
-          <div className="card">
-            <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={strategy.assets.map((a) => a.code)} />
-          </div>
+          <div className="section-head"><h2>Movimentar</h2><span className="xsmall faint">mesmo padrão da carteira internacional · nenhuma ordem é enviada</span></div>
+          <MovementTabs panels={[
+            { key: "compra", label: "Compra", content: <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={strategy.assets.map((a) => a.code)} mode="buy" /> },
+            { key: "venda", label: "Venda", content: <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={s.holdings.filter((h) => PRICED.has(h.asset_class)).map((h) => h.code)} mode="sell" /> },
+            { key: "provento", label: "Provento", content: <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={s.holdings.filter((h) => PRICED.has(h.asset_class)).map((h) => h.code)} mode="income" /> },
+            { key: "rf", label: "Renda fixa", content: (
+              <div className="stack">
+                <FundPrintImport />
+                <details><summary className="small muted">Registrar manualmente (aporte, resgate, saldo)</summary>
+                  <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={[]} mode="rf" />
+                </details>
+              </div>
+            ) },
+          ]} />
         </section>
       )}
 

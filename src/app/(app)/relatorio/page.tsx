@@ -4,8 +4,9 @@ import { loadContext } from "@/lib/data/load";
 import { brl, dateBr, n, pct, usd } from "@/lib/format";
 
 /** Relatório mensal — leitura de ~5 minutos, gerado a partir dos dados atuais. */
-export default async function RelatorioPage() {
+export default async function RelatorioPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const user = await requireUser();
+  if ((await searchParams).m === "BR") return <BrReport />;
   const ctx = await loadContext(user);
   const { portfolio: p, analyses } = ctx;
   const [snapshots, transactions, dividends, defaultAmount] = await Promise.all([
@@ -82,5 +83,36 @@ function Block({ n: num, title, children }: { n: number; title: string; children
       <h2 style={{ marginBottom: 6 }}><span className="faint">{num}.</span> {title}</h2>
       <div className="small" style={{ lineHeight: 1.65 }}>{children}</div>
     </section>
+  );
+}
+
+/** Relatório do mês da carteira Brasil (mesmo padrão do internacional). */
+async function BrReport() {
+  const user = await requireUser();
+  const { getRepo } = await import("@/lib/db/repo");
+  const { loadBrazil } = await import("@/lib/data/brazil");
+  const { CLASS_LABEL, KIND_LABEL } = await import("@/lib/portfolio/ledger");
+  const { brl, pct } = await import("@/lib/format");
+  const br = await loadBrazil(await getRepo(user.id));
+  const s = br.summary;
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const month = br.entries.filter((e) => e.trade_date >= since);
+  const sum = (kinds: string[]) => month.filter((e) => kinds.includes(e.kind)).reduce((a, e) => a + e.amount, 0);
+  return (
+    <div className="stack" style={{ gap: 0 }}>
+      <section className="hero"><div><div className="hero-title">🇧🇷 Carteira Brasil</div><h1>Relatório — últimos 30 dias</h1></div></section>
+      <section className="section grid grid-4">
+        <div className="card card-tight"><div className="kpi-label">Aportes / compras</div><div className="kpi-value num">{brl(sum(["buy", "contribution"]))}</div></div>
+        <div className="card card-tight"><div className="kpi-label">Vendas / resgates</div><div className="kpi-value num">{brl(sum(["sell", "redemption"]))}</div></div>
+        <div className="card card-tight"><div className="kpi-label">Proventos e rendimentos</div><div className="kpi-value num">{brl(sum(["dividend", "income"]))}</div></div>
+        <div className="card card-tight"><div className="kpi-label">Gerado pelo mercado (total)</div><div className="kpi-value num">{s.marketGain !== null ? brl(s.marketGain) : "—"}</div><div className="kpi-sub">{pct(s.marketGainPct, 2, true)} sobre o aportado</div></div>
+      </section>
+      <section className="section card stack">
+        <h3>Alocação × meta</h3>
+        <ul className="clean small">{s.classes.filter((c) => c.target > 0 || c.value > 0).map((c) => <li key={c.asset_class}>{CLASS_LABEL[c.asset_class]}: {c.weight === null ? "—" : `${c.weight.toFixed(1)}%`} × meta {c.target.toFixed(0)}%</li>)}</ul>
+        <h3>Movimentações do período ({month.length})</h3>
+        <ul className="clean small">{month.slice(-20).reverse().map((e) => <li key={e.id}>{e.trade_date.split("-").reverse().join("/")} · {KIND_LABEL[e.kind]} · {e.code} · {brl(e.amount)}</li>)}</ul>
+      </section>
+    </div>
   );
 }

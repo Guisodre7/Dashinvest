@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import MarketClock from "@/components/MarketClock";
-import MarketSwitch from "@/components/MarketSwitch";
-import NavLinks, { MobileTabBar } from "@/components/NavLinks";
 import NotificationBell from "@/components/NotificationBell";
+import { MarketSwitch, MobileBar, PortfolioSubnav } from "@/components/PortfolioNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import { requireUser } from "@/lib/auth";
 import { isLocalDevMode } from "@/lib/devmode";
@@ -19,7 +19,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <svg className="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1f3a5f" /><path d="M8 21l5-6 4 3 7-8" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <span className="hide-mobile">DashInvest</span>
           </Link>
-          <NavLinks />
+          <div className="hide-mobile"><Suspense><MarketSwitch /></Suspense></div>
+          <nav className="nav hide-mobile" aria-label="Ferramentas">
+            <Link href="/analisar">Analisar compra</Link>
+            <Link href="/teses">Minhas teses</Link>
+          </nav>
           <MarketClock />
           <NotificationBell />
           <ThemeToggle />
@@ -31,8 +35,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="banner banner-warn">Modo local de desenvolvimento — sem autenticação e com armazenamento em arquivo. Indisponível em produção.</div>
         </div>
       )}
-      <main className="shell"><MarketSwitch />{children}</main>
-      <MobileTabBar />
+      <main className="shell">
+        <Suspense><PortfolioSubnav /></Suspense>
+        {children}
+      </main>
+      <Suspense><MobileBar /></Suspense>
     </>
   );
 }

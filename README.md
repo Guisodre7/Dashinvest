@@ -111,6 +111,20 @@ Princípio: separar **qualidade do ativo**, **valor (faixa de valuation)** e **p
 - **Alerta de tese**: tese ativa + sinais de deterioração → notificação crítica com link para a tese.
 - **Foi uma boa entrada?** (página do ativo e aba Valuation da carteira Brasil): cada compra é julgada pelo retrato diário da análise na data (`stance_history`, agora também da B3), não pelo resultado. Compra racional que caiu continua boa decisão; compra esticada que subiu continua arriscada.
 
+## Navegação (mesmo padrão nas duas carteiras)
+
+- **Topo:** 🇧🇷 Brasil · 🇺🇸 Internacional · Visão geral, mais Analisar compra e Minhas teses.
+- **Barra inferior do celular:** Brasil · Internacional · Geral · Analisar · Teses.
+- **Submenu idêntico por carteira** (`src/components/PortfolioNav.tsx`): Resumo · Aporte · Posições · Movimentar · Valuation · Estratégia · Projeção · Relatório.
+- **Movimentar com as mesmas abas:**
+  - Internacional: Compra · Venda · Provento · Corrigir posição;
+  - Brasil: Compra · Venda · Provento · Renda fixa.
+  - Comprovante/print no mesmo lugar.
+  - Ativo novo dos EUA (ex.: NU) é conferido no fornecedor e cadastrado ao salvar.
+- **Aporte Brasil** (`src/lib/allocation/brAllocate.ts`): corrige o desvio das classes; dentro de ações/FIIs divide pela postura de cada ativo (atrativo recebe mais, esticado/deteriorado não recebe; sem candidatos → caixa de oportunidade).
+- **Plano de aporte do mês** (Visão geral, `src/lib/allocation/split.ts`): divide o total entre Brasil e exterior pela meta (editável) e por ajustes explicados (dólar ±5% no mês, oportunidades). Daí segue para o aporte de cada carteira.
+- **Macro:** saiu do Internacional; fica como contexto na Visão geral.
+
 ## Notificações no iPhone (Web Push, gratuito)
 
 "Monitorar muito, notificar pouco, explicar bem." Preço subindo ou caindo sozinho nunca gera push.

@@ -130,7 +130,7 @@ export function macroCandidates(macro: MacroIndicator[]): Candidate[] {
   const ten = macro.find((m) => m.key === "US10Y");
   if (ten?.change_1m != null && Math.abs(ten.change_1m) >= 0.5) {
     out.push({
-      category: "macro", priority: "medium", market: "US", ticker: null, url: "/?aba=macro", key: `MACRO:US10Y:${ten.change_1m > 0 ? "up" : "down"}`,
+      category: "macro", priority: "medium", market: "US", ticker: null, url: "/geral#macro", key: `MACRO:US10Y:${ten.change_1m > 0 ? "up" : "down"}`,
       title: `Juros dos EUA ${ten.change_1m > 0 ? "subiram" : "caíram"} ${Math.abs(ten.change_1m).toFixed(2).replace(".", ",")} p.p. no mês`,
       body: `FATO: Treasury 10 anos em ${ten.value?.toFixed(2).replace(".", ",")}% (fonte: ${ten.meta?.source ?? "—"}). INTERPRETAÇÃO: juros ${ten.change_1m > 0 ? "maiores pressionam valuation de growth, REITs (VNQ) e títulos (LQD)" : "menores aliviam valuation de growth, REITs e títulos"}.`,
       reason: "Variação de juros ≥ 0,5 p.p. em 1 mês",

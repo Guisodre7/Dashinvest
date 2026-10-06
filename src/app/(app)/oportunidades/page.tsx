@@ -9,6 +9,7 @@ import { loadBrStances } from "@/lib/data/brStances";
 import { loadContext } from "@/lib/data/load";
 import { loadStances } from "@/lib/data/stances";
 import { saveTaxRules } from "./actions";
+import { RadarTable } from "@/components/sections";
 
 const GROUPS: { key: (typeof ACTION_META)[keyof typeof ACTION_META]["group"]; title: string; empty: string }[] = [
   { key: "comprar", title: "🟢 Comprar — ativos atrativos", empty: "Nenhum ativo em faixa atrativa com qualidade e tese preservadas." },
@@ -19,11 +20,13 @@ const GROUPS: { key: (typeof ACTION_META)[keyof typeof ACTION_META]["group"]; ti
   { key: "aguardar", title: "⚪ Aguardar dados", empty: "—" },
 ];
 
-export default async function OportunidadesPage() {
+export default async function OportunidadesPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const user = await requireUser();
+  const { m } = await searchParams;
+  const showUS = m !== "BR", showBR = m !== "US";
   const ctx = await loadContext(user);
-  const [{ stances, tax }, br] = await Promise.all([loadStances(ctx, ctx.repo), loadBrazil(ctx.repo)]);
-  const brs = await loadBrStances(br, ctx.repo);
+  const [{ stances, tax }, br] = await Promise.all([loadStances(ctx, ctx.repo), showBR ? loadBrazil(ctx.repo) : null]);
+  const brs = br ? await loadBrStances(br, ctx.repo) : { views: [], errors: {} as Record<string, string> };
   const byGroup = (g: string) => stances.filter((s) => ACTION_META[s.action].group === g);
   const name = (t: string) => ctx.analyses.find((a) => a.ticker === t)?.name;
   const price = (t: string) => ctx.analyses.find((a) => a.ticker === t)?.price ?? null;
@@ -33,15 +36,15 @@ export default async function OportunidadesPage() {
     <div className="stack" style={{ gap: 0 }}>
       <section className="hero">
         <div>
-          <h1>Oportunidades agora</h1>
+          <h1>{m === "US" ? "🇺🇸 Valuation e oportunidades" : m === "BR" ? "🇧🇷 Valuation e oportunidades" : "Oportunidades agora — Brasil + Exterior"}</h1>
           <p className="muted small">Qualidade do ativo + faixa de valuation + tese + peso na carteira. Variação de preço não é valuation; nada aqui é ordem. Horizonte: semanas a anos, não day trade.</p>
           <p className="small"><Link href="/analisar">Analisar compra</Link> · <Link href="/teses">Minhas teses</Link> · <Link href="/mudancas">O que mudou?</Link> · <Link href="/estrategia">Pesos-alvo (Estratégia)</Link> · <Link href="/notificacoes">Notificações</Link></p>
         </div>
       </section>
 
       {GROUPS.map((g) => {
-        const list: Stance[] = byGroup(g.key);
-        const brList = brs.views.filter((v) => ACTION_META[v.stance.action].group === g.key);
+        const list: Stance[] = showUS ? byGroup(g.key) : [];
+        const brList = showBR ? brs.views.filter((v) => ACTION_META[v.stance.action].group === g.key) : [];
         if (!list.length && !brList.length && (g.key === "manter" || g.key === "aguardar")) return null;
         return (
           <section key={g.key} className="section">
@@ -59,6 +62,13 @@ export default async function OportunidadesPage() {
           </section>
         );
       })}
+
+      {showUS && m === "US" && (
+        <section className="section">
+          <div className="section-head"><h2>Radar</h2><span className="xsmall faint">valuation · fundamentos · momentum · analistas · drawdown</span></div>
+          <RadarTable analyses={ctx.analyses} />
+        </section>
+      )}
 
       <section className="section grid grid-2">
         <div>

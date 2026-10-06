@@ -2,6 +2,7 @@ import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
 import BuyTradeForm from "@/components/BuyTradeForm";
 import DividendForm from "@/components/DividendForm";
+import MovementTabs from "@/components/MovementTabs";
 import SellTradeForm from "@/components/SellTradeForm";
 import { serverConfig } from "@/lib/config";
 import HistoryChart from "@/components/HistoryChart";
@@ -26,7 +27,7 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
     repo.ledgerReady(), repo.getRealizedUsd().catch(() => 0),
   ]);
   const tickers = assets.map((a) => a.ticker);
-  const tickerOptions = tickers.map((t) => <option key={t} value={t}>{t}</option>);
+  const tickerOptions = tickers.map((t) => <option key={t} value={t} />);
 
   const first = snapshots[0], last = snapshots[snapshots.length - 1];
   const usdChange = first && last ? (last.total_usd / first.total_usd - 1) * 100 : null;
@@ -37,29 +38,40 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="stack" style={{ gap: 0 }}>
-      <section className="hero"><div><h1>Carteira</h1><p className="muted small">Cadastro de posições, compras e proventos. Nenhuma ordem é enviada a corretoras e nenhuma credencial é armazenada.</p></div></section>
+      <section className="hero"><div><div className="hero-title">🇺🇸 Carteira Internacional</div><h1>Movimentar</h1><p className="muted small">Compras, vendas e proventos — qualquer ativo da NYSE/Nasdaq (ativos novos são conferidos e cadastrados ao salvar). Nenhuma ordem é enviada a corretoras.</p></div></section>
 
 
-      <section className="section grid grid-2">
-        <div className="card">
-          <h3>Registrar compra (aporte)</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Atualiza quantidade, preço médio e câmbio médio automaticamente. Envie o comprovante da corretora para preencher os campos automaticamente.</p>
-          <BuyTradeForm action={registerBuy} undoAction={undoBuy} tickers={tickers} aiAvailable={!!serverConfig.anthropicApiKey} defaultBroker={transactions.find((t) => t.broker)?.broker ?? positions.find((p) => p.broker)?.broker ?? null} />
-        </div>
-        <div className="card">
-          <h3>Cadastrar / corrigir posição</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Substitui a posição do ativo. Use para importar a carteira atual. O câmbio médio (R$/US$) permite separar retorno cambial.</p>
-          <ActionForm action={savePosition} submitLabel="Salvar posição">
-            <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
-            <label>Quantidade<input name="quantity" inputMode="decimal" required /></label>
-            <label>Preço médio (US$)<input name="avg_price" inputMode="decimal" required /></label>
-            <label>Câmbio médio (R$/US$)<input name="avg_fx_rate" inputMode="decimal" /></label>
-            <label>Data da compra<input name="purchase_date" type="date" /></label>
-            <label>Corretora<input name="broker" /></label>
-            <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
-            <label>Moeda<select name="currency" defaultValue="USD"><option>USD</option></select></label>
-          </ActionForm>
-        </div>
+      <section className="section">
+        <MovementTabs panels={[
+          { key: "compra", label: "Compra", content: (
+            <div className="stack">
+              <p className="xsmall faint">Atualiza quantidade, preço médio e câmbio médio. Envie o comprovante para preencher os campos (e registrar automaticamente quando tudo confere).</p>
+              <BuyTradeForm action={registerBuy} undoAction={undoBuy} tickers={tickers} aiAvailable={!!serverConfig.anthropicApiKey} defaultBroker={transactions.find((t) => t.broker)?.broker ?? positions.find((p) => p.broker)?.broker ?? null} />
+            </div>
+          ) },
+          { key: "venda", label: "Venda", content: (
+            <div className="stack">
+              <p className="xsmall faint">Venda total ou parcial já executada. Lucro realizado até hoje: <strong className={`num ${tone(realizedUsd)}`}>{usd(realizedUsd)}</strong>.</p>
+              {sellReady ? <SellTradeForm action={registerSell} positions={positions.filter((p) => p.quantity > 0).map((p) => ({ ticker: p.ticker, quantity: p.quantity }))} /> : <p className="small muted">Disponível após aplicar a migração 0004 no Supabase.</p>}
+            </div>
+          ) },
+          { key: "provento", label: "Provento", content: <DividendForm action={registerDividend} tickers={tickers} /> },
+          { key: "posicao", label: "Corrigir posição", content: (
+            <div className="stack">
+              <p className="xsmall faint">Substitui a posição do ativo (para importar a carteira atual ou corrigir). O câmbio médio permite separar o retorno cambial.</p>
+              <ActionForm action={savePosition} submitLabel="Salvar posição">
+                <label>Ticker<input name="ticker" list="pos-tickers" required autoCapitalize="characters" placeholder="NU" /><datalist id="pos-tickers">{tickerOptions}</datalist></label>
+                <label>Quantidade<input name="quantity" inputMode="decimal" required /></label>
+                <label>Preço médio (US$)<input name="avg_price" inputMode="decimal" required /></label>
+                <label>Câmbio médio (R$/US$)<input name="avg_fx_rate" inputMode="decimal" /></label>
+                <label>Data da compra<input name="purchase_date" type="date" /></label>
+                <label>Corretora<input name="broker" /></label>
+                <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
+                <input type="hidden" name="currency" value="USD" />
+              </ActionForm>
+            </div>
+          ) },
+        ]} />
       </section>
 
       <section className="section">
@@ -109,17 +121,6 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section className="section grid grid-2">
-        <div className="card">
-          <h3>Registrar venda</h3>
-          <p className="xsmall faint" style={{ marginBottom: 8 }}>Venda total ou parcial já executada na corretora. Calcula o lucro realizado sobre o preço médio (com taxas). Lucro realizado até hoje: <strong className={`num ${tone(realizedUsd)}`}>{usd(realizedUsd)}</strong>.</p>
-          {sellReady ? (
-            <SellTradeForm action={registerSell} positions={positions.filter((p) => p.quantity > 0).map((p) => ({ ticker: p.ticker, quantity: p.quantity }))} />
-          ) : <p className="small muted">Disponível após aplicar a migração 0004 no Supabase.</p>}
-        </div>
-        <div className="card">
-          <h3>Registrar dividendo / distribuição</h3>
-          <DividendForm action={registerDividend} tickers={tickers} />
-        </div>
         <div className="card">
           <h3>Proventos e reinvestimento</h3>
           {(() => {

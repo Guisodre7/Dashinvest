@@ -3,7 +3,7 @@ import ContributionForm from "@/components/ContributionForm";
 import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
-import { AlertsList, MacroPanel, RadarTable, WhereToInvest } from "@/components/sections";
+import { AlertsList, WhereToInvest } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
 import { ACTION_META } from "@/lib/analysis/stance";
 import { requireUser } from "@/lib/auth";
@@ -12,15 +12,13 @@ import { loadStances } from "@/lib/data/stances";
 import { dateBr, pct, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 
-const TABS = [
-  { key: "resumo", label: "Resumo" }, { key: "aporte", label: "Aporte" }, { key: "carteira", label: "Carteira" },
-  { key: "radar", label: "Radar" }, { key: "macro", label: "Macro" }, { key: "alertas", label: "Alertas" },
-] as const;
+// Abas desta página (navegadas pelo submenu da carteira; "alertas" pelo link do Resumo).
+const TABS = [{ key: "resumo" }, { key: "aporte" }, { key: "carteira" }, { key: "alertas" }] as const;
 type Tab = (typeof TABS)[number]["key"];
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ aba?: string; valor?: string }> }) {
   const user = await requireUser();
-  const { aba } = await searchParams;
+  const { aba, valor } = await searchParams;
   const tab: Tab = TABS.some((t) => t.key === aba) ? (aba as Tab) : "resumo";
   const ctx = await loadContext(user);
   const { portfolio, analyses } = ctx;
@@ -43,7 +41,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     tab === "aporte" ? ctx.repo.getLatestRecommendation().catch(() => null) : null,
     tab === "resumo" ? loadStances(ctx, ctx.repo) : null,
   ]);
-  const defaultAmount = savedAmount ?? 550;
+  // Valor vindo do plano mensal (Visão geral) tem prioridade sobre o padrão salvo.
+  const fromPlan = Number(String(valor ?? "").replace(",", "."));
+  const defaultAmount = Number.isFinite(fromPlan) && fromPlan > 0 ? Math.round(fromPlan * 100) / 100 : savedAmount ?? 550;
   const preview = needsAllocation ? allocate({
     contribution: defaultAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
     existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
@@ -70,19 +70,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
       </section>
       <section className="grid grid-4 kpis-compact"><LivePortfolioKpis /></section>
-
-      <div className="row-wrap" style={{ marginTop: 12 }}>
-        <Link href="/analisar" className="btn btn-primary btn-sm">🔎 Analisar nova compra</Link>
-        <Link href="/teses" className="btn btn-sm">📓 Minhas teses</Link>
-      </div>
-
-      <nav className="tabs dash-tabs" aria-label="Seções do painel">
-        {TABS.map((t) => (
-          <Link key={t.key} href={t.key === "resumo" ? "/" : `/?aba=${t.key}`} scroll={false} aria-current={tab === t.key ? "page" : undefined}>
-            {t.label}{t.key === "alertas" && alertCount > 0 ? ` (${alertCount})` : ""}
-          </Link>
-        ))}
-      </nav>
 
       {tab === "resumo" && (
         <>
@@ -143,19 +130,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <div className="section-head"><h2>Carteira</h2><Link href="/carteira" className="small muted">Editar posições →</Link></div>
           <LivePortfolioTable />
           <p className="xsmall faint" style={{ marginTop: 6 }}>Pesos sobre a carteira estratégica (exclui a posição legada VOO). Retorno total BRL = (1 + retorno do ativo) × (1 + retorno cambial) − 1.</p>
-        </section>
-      )}
-
-      {tab === "radar" && (
-        <section className="section">
-          <div className="section-head"><h2>Radar</h2><span className="xsmall faint">valuation · fundamentos · momentum · analistas · drawdown</span></div>
-          <RadarTable analyses={analyses} />
-        </section>
-      )}
-
-      {tab === "macro" && (
-        <section className="section" id="macro">
-          <MacroPanel macro={ctx.macro} regime={ctx.regime} impacts={ctx.impacts} events={ctx.macroEvents} />
         </section>
       )}
 

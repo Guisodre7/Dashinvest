@@ -2,7 +2,28 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { invalidateUserContext } from "@/lib/data/load";
-import { getRepo } from "@/lib/db/repo";
+import { getRepo, type Repo } from "@/lib/db/repo";
+import { getMarketDataProvider } from "@/lib/market";
+import { ASSET_META } from "@/lib/portfolio/defaults";
+
+const KNOWN_ETFS = new Set(["VOO", "VTI", "SPY", "QQQ", "IVV", "JEPQ", "JEPI", "SCHD", "LQD", "VNQ", "BND", "AGG", "TLT", "IEF", "VXUS", "VEA", "VWO", "DIA", "UUP", "GLD", "XLK", "SMH"]);
+
+/**
+ * Ativo novo (ex.: NU): confere na bolsa pelo fornecedor de cotações e cadastra
+ * automaticamente — não é preciso ir antes em Estratégia.
+ */
+async function ensureUsAsset(repo: Repo, ticker: string): Promise<void> {
+  if ((await repo.getAssets()).some((a) => a.ticker === ticker)) return;
+  let name: string | null = null;
+  try {
+    const q = await getMarketDataProvider().getQuote(ticker);
+    if (!q.price) throw new Error("sem preço");
+    name = q.name;
+  } catch {
+    throw new Error(`Não encontrei ${ticker} na NYSE/Nasdaq pelo fornecedor de cotações. Confira o ticker (ex.: NU, BRK.B).`);
+  }
+  await repo.upsertAsset({ ticker, name: name ?? ASSET_META[ticker]?.name ?? ticker, asset_type: KNOWN_ETFS.has(ticker) ? "etf" : "stock" });
+}
 import type { PositionRow } from "@/lib/portfolio/calc";
 
 const TICKER = /^[A-Z.]{1,10}$/;
@@ -47,8 +68,7 @@ export async function savePosition(_: FormState, fd: FormData): Promise<FormStat
     const repo = await getRepo(user.id);
     const ticker = String(fd.get("ticker") ?? "").trim().toUpperCase();
     if (!TICKER.test(ticker)) throw new Error("Ticker inválido.");
-    const assets = await repo.getAssets();
-    if (!assets.some((a) => a.ticker === ticker)) throw new Error(`${ticker} não está cadastrado em Ativos (Estratégia).`);
+    await ensureUsAsset(repo, ticker);
     await repo.upsertPosition({
       ticker,
       quantity: num(fd.get("quantity"), { required: true, min: 0 })!,
@@ -95,6 +115,7 @@ export async function registerBuy(_: BuyState, fd: FormData): Promise<BuyState> 
     const fx = num(fd.get("fx_rate"), { min: 0 });
     const tradeDate = date(fd.get("trade_date")) ?? new Date().toISOString().slice(0, 10);
     if (qty <= 0) throw new Error("Quantidade deve ser maior que zero.");
+    await ensureUsAsset(repo, ticker);
 
     // Comprovante já registrado? (número da transação/ordem da corretora)
     const tradeId = String(fd.get("trade_id") ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24) || null;
@@ -155,6 +176,7 @@ export async function registerDividend(_: FormState, fd: FormData): Promise<Form
     if (!TICKER.test(ticker)) throw new Error("Ticker inválido.");
     const kind = fd.get("kind") === "distribution" ? "distribution" : "dividend";
     const repo = await getRepo(user.id);
+    await ensureUsAsset(repo, ticker);
     const gross = num(fd.get("gross_amount"), { required: true, min: 0 })!;
     const payDate = date(fd.get("pay_date"));
     const dup = (await repo.getDividends()).find((d) => d.ticker === ticker && d.pay_date === payDate && Math.abs(d.gross_amount - gross) < 0.005);

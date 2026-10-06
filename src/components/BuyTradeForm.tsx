@@ -195,9 +195,10 @@ export default function BuyTradeForm({
       <form ref={formRef} action={formAction} className="form-grid">
         <input type="hidden" name="trade_id" value={fields.trade_id} />
         <label>Ticker
-          <select name="ticker" required value={fields.ticker} onChange={set("ticker")} className={cls("ticker")}>
-            {tickerOptions.map((t) => <option key={t} value={t}>{t}{t === extraTicker ? " (não cadastrado)" : ""}</option>)}
-          </select>
+          <input name="ticker" required list="buy-tickers" autoCapitalize="characters" placeholder="NVDA, NU…" value={fields.ticker}
+            onChange={(e) => setFields({ ...fields, ticker: e.target.value.toUpperCase() })} className={cls("ticker")} />
+          <datalist id="buy-tickers">{tickerOptions.map((t) => <option key={t} value={t} />)}</datalist>
+          {fields.ticker && !tickers.includes(fields.ticker) && <span className="xsmall faint">Ativo novo: será conferido na bolsa e cadastrado ao salvar.</span>}
         </label>
         <label>Quantidade<input name="quantity" inputMode="decimal" required value={fields.quantity} onChange={set("quantity")} className={cls("quantity")} /></label>
         <label>Preço (US$)<input name="price" inputMode="decimal" required value={fields.price} onChange={set("price")} className={cls("price")} /></label>

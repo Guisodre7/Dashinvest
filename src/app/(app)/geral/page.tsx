@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Kpi, WeightBar } from "@/components/sections";
+import ActionForm from "@/components/ActionForm";
+import { Kpi, MacroPanel, WeightBar } from "@/components/sections";
+import { splitMonthly } from "@/lib/allocation/split";
+import { loadBrStances } from "@/lib/data/brStances";
+import { loadStances } from "@/lib/data/stances";
+import { parseUserNumber } from "@/lib/userNumber";
+import { saveSplitTarget } from "./actions";
 import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
 import { loadContext } from "@/lib/data/load";
@@ -11,10 +17,25 @@ const US_GROUP: Record<string, string> = {
   "REAL ESTATE": "REITs (VNQ)", LEGADO: "VOO (legado)",
 };
 
-export default async function GeralPage() {
+export default async function GeralPage({ searchParams }: { searchParams: Promise<{ total?: string }> }) {
+  const { total: totalRaw } = await searchParams;
   const user = await requireUser();
   const ctx = await loadContext(user);
   const br = await loadBrazil(ctx.repo);
+  const [splitSaved, projection] = await Promise.all([ctx.repo.getSetting<number>("split_target").catch(() => null), ctx.repo.getProjectionSettings().catch(() => null)]);
+  const splitTarget = splitSaved ?? projection?.brazilPct ?? 50;
+  const monthly = parseUserNumber(totalRaw);
+  // Oportunidades só são calculadas quando o plano é pedido (fundamentos da B3 têm cache de 24h).
+  let plan: ReturnType<typeof splitMonthly> | null = null;
+  if (monthly && monthly > 0) {
+    const [us, brv] = await Promise.all([loadStances(ctx, ctx.repo), loadBrStances(br, ctx.repo)]);
+    const opp = (a: string) => a === "comprar" || a === "recompra";
+    plan = splitMonthly({
+      totalBrl: monthly, brValue: br.summary.currentValue, usValueBrl: ctx.fx ? ctx.portfolio.totalUsd * ctx.fx.rate : 0,
+      targetBrPct: splitTarget, fxRate: ctx.fx?.rate ?? null, fxChange1m: ctx.fx?.change_1m ?? null,
+      brOpportunities: brv.views.filter((v) => opp(v.stance.action)).length, usOpportunities: us.stances.filter((x) => opp(x.action)).length,
+    });
+  }
   const fx = ctx.fx?.rate ?? null;
   const us = ctx.portfolio;
   const b = br.summary;
@@ -54,6 +75,36 @@ export default async function GeralPage() {
         </div>
       </section>
 
+      <section className="section card stack" id="plano">
+        <h2>Plano de aporte do mês</h2>
+        <p className="small muted">Quanto vai para cada carteira, pelo desvio da meta e pelo contexto (câmbio, oportunidades). Depois, cada carteira divide o valor entre os ativos.</p>
+        <form className="contrib" method="get" action="/geral#plano">
+          <div className="stack" style={{ gap: 4 }}>
+            <span className="small muted">Quanto vou aportar este mês (total)?</span>
+            <div className="money"><span>R$</span><input name="total" inputMode="decimal" defaultValue={totalRaw ?? ""} placeholder="5.000" aria-label="Aporte mensal total em reais" /></div>
+          </div>
+          <button className="btn btn-primary" style={{ alignSelf: "flex-end", padding: "12px 20px" }}>DIVIDIR</button>
+        </form>
+        {plan && (
+          <>
+            <div className="grid grid-2">
+              <div className="callout"><div className="kpi-label">🇧🇷 Brasil</div><div className="kpi-value num">{brl(plan.brBrl)}</div>
+                {plan.brBrl > 0 && <a className="btn btn-sm" href={`/brasil?aba=aporte&valor=${plan.brBrl}`}>Distribuir na carteira Brasil →</a>}</div>
+              <div className="callout"><div className="kpi-label">🇺🇸 Exterior</div><div className="kpi-value num">{brl(plan.usBrl)}{plan.usUsd !== null && <span className="small muted"> ≈ {usd(plan.usUsd)}</span>}</div>
+                {plan.usUsd !== null && plan.usUsd > 0 && <a className="btn btn-sm" href={`/?aba=aporte&valor=${plan.usUsd}`}>Distribuir na carteira internacional →</a>}</div>
+            </div>
+            <ul className="clean small">{plan.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+            <p className="xsmall faint">Sugestão do modelo para o cenário atual — não é garantia de retorno nem ordem.</p>
+          </>
+        )}
+        <details className="small">
+          <summary className="muted">Meta Brasil × Exterior: {splitTarget}% / {100 - splitTarget}%</summary>
+          <ActionForm action={saveSplitTarget} submitLabel="Salvar meta" className="row">
+            <label>% Brasil<input name="br_pct" inputMode="decimal" defaultValue={splitTarget} /></label>
+          </ActionForm>
+        </details>
+      </section>
+
       <section className="section grid grid-4">
         <Kpi label="🇧🇷 Brasil" value={brl(b.currentValue)} sub={`${n(share(b.currentValue), 1)}% do total`} />
         <Kpi label="🇺🇸 Exterior" value={usd(us.totalUsd)} sub={usBrl !== null ? `${brl(usBrl)} · ${n(share(usBrl), 1)}% do total` : "câmbio indisponível"} />
@@ -91,6 +142,12 @@ export default async function GeralPage() {
       </section>
 
       <p className="xsmall faint section">Detalhes: <Link href="/brasil">Carteira Brasil</Link> · <Link href="/">Carteira Internacional</Link></p>
+      <section className="section" id="macro">
+        <details>
+          <summary className="section-head" style={{ cursor: "pointer" }}><h2 style={{ display: "inline" }}>🌎 Contexto macro</h2> <span className="xsmall faint">juros, câmbio, índices — abrir</span></summary>
+          <MacroPanel macro={ctx.macro} regime={ctx.regime} impacts={ctx.impacts} events={ctx.macroEvents} />
+        </details>
+      </section>
     </div>
   );
 }

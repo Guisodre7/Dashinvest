@@ -18,14 +18,24 @@ const KINDS: Record<Cls, { value: string; label: string }[]> = {
  * Registro de movimentação da carteira Brasil. Ações/FIIs: quantidade × preço.
  * Renda fixa/caixa: valor (aporte, resgate) ou saldo atual (não é fluxo de caixa).
  */
-export default function LedgerForm({ action, fixedIncome, suggestions }: {
+/** Modo fixo usado pelas abas Compra · Venda · Provento · Renda fixa. */
+type Mode = "buy" | "sell" | "income" | "rf";
+const MODE_CLASSES: Record<Mode, Cls[]> = { buy: ["acao", "fii"], sell: ["acao", "fii"], income: ["acao", "fii"], rf: ["renda_fixa", "caixa"] };
+const CLASS_NAME: Record<Cls, string> = { acao: "Ação", fii: "FII", renda_fixa: "Renda fixa", caixa: "Caixa" };
+const modeKind = (mode: Mode | undefined, c: Cls) =>
+  mode === "buy" ? "buy" : mode === "sell" ? "sell" : mode === "income" ? (c === "fii" ? "income" : "dividend") : KINDS[c][0].value;
+
+export default function LedgerForm({ action, fixedIncome, suggestions, mode }: {
   action: (s: State, fd: FormData) => Promise<State>;
   fixedIncome: { code: string; name: string | null }[];
   suggestions: string[];
+  mode?: Mode;
 }) {
   const [state, formAction, pending] = useActionState(action, { ok: true, message: null });
-  const [cls, setCls] = useState<Cls>("acao");
-  const [kind, setKind] = useState("buy");
+  const classes: Cls[] = mode ? MODE_CLASSES[mode] : ["acao", "fii", "renda_fixa", "caixa"];
+  const [cls, setCls] = useState<Cls>(classes[0]);
+  const [kind, setKind] = useState(modeKind(mode, classes[0]));
+  const kindLocked = mode === "buy" || mode === "sell" || mode === "income";
   const [existing, setExisting] = useState("");
   const priced = cls === "acao" || cls === "fii";
   const flowOnly = kind === "dividend" || kind === "income";
@@ -34,15 +44,17 @@ export default function LedgerForm({ action, fixedIncome, suggestions }: {
   return (
     <form action={formAction} className="form-grid" key={state.ok && state.message ? state.message : "f"}>
       <label>Classe
-        <select name="asset_class" value={cls} onChange={(e) => { const c = e.target.value as Cls; setCls(c); setKind(KINDS[c][0].value); }}>
-          <option value="acao">Ação</option><option value="fii">FII</option><option value="renda_fixa">Renda fixa</option><option value="caixa">Caixa</option>
+        <select name="asset_class" value={cls} onChange={(e) => { const c = e.target.value as Cls; setCls(c); setKind(modeKind(mode, c)); }}>
+          {classes.map((c) => <option key={c} value={c}>{CLASS_NAME[c]}</option>)}
         </select>
       </label>
-      <label>Movimentação
-        <select name="kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-          {KINDS[cls].map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-        </select>
-      </label>
+      {kindLocked ? <input type="hidden" name="kind" value={kind} /> : (
+        <label>Movimentação
+          <select name="kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+            {KINDS[cls].map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+          </select>
+        </label>
+      )}
 
       {priced ? (
         <label>Ticker<input name="code" list="br-tickers" required autoCapitalize="characters" placeholder="ITUB4" /></label>
@@ -73,7 +85,7 @@ export default function LedgerForm({ action, fixedIncome, suggestions }: {
       <datalist id="br-tickers">{suggestions.map((s) => <option key={s} value={s} />)}</datalist>
 
       <div className="row span-2">
-        <button className="btn btn-primary btn-sm" disabled={pending}>{pending ? "Salvando…" : "Registrar"}</button>
+        <button className="btn btn-primary btn-sm" disabled={pending}>{pending ? "Salvando…" : mode === "buy" ? "Registrar compra" : mode === "sell" ? "Registrar venda" : mode === "income" ? "Registrar provento" : "Registrar"}</button>
         {state.message && <span className={`small ${state.ok ? "pos" : "neg"}`} role="status">{state.message}</span>}
       </div>
       {kind === "balance" && <p className="xsmall faint span-2">O saldo atualiza o valor da posição; não conta como aporte nem como resgate.</p>}
