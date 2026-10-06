@@ -2,6 +2,7 @@ import "server-only";
 import { serverConfig } from "../config";
 import { buildMeta } from "./freshness";
 import { getJson, HttpError, toNum } from "./http";
+import { memo } from "./memo";
 import type { Quote } from "./types";
 
 const BASE = "https://brapi.dev/api/quote";
@@ -31,9 +32,10 @@ export async function getBrQuotes(codes: string[]): Promise<BrQuotes> {
     await Promise.all(codes.slice(i, i + 2).map(async (code) => {
       try {
         // Chave no header (recomendação da brapi), nunca na URL.
-        const body = await getJson<BrapiBody>(NAME, `quote:${code}`, `${BASE}/${encodeURIComponent(code)}`, {
-          revalidate: 900, ticker: code, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
+        // 10 min em memória (a cotação gratuita já é atrasada); sem cópia vencida do cache do Next.
+        const body = await memo(`brapi:${code}`, 600_000, () => getJson<BrapiBody>(NAME, `quote:${code}`, `${BASE}/${encodeURIComponent(code)}`, {
+          revalidate: 0, ticker: code, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        }));
         quotes[code] = parseBrapiQuote(code, body);
         if (!quotes[code]) errors[code] = body.message ? `brapi: ${body.message.slice(0, 80)}` : "resposta sem preço";
       } catch (err) {

@@ -235,7 +235,11 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
 function mergeAlerts(derived: AlertRow[], stored: AlertRow[]): AlertRow[] {
   const keys = new Set(derived.map((d) => d.dedupe_key));
   const sev = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-  return [...derived, ...stored.filter((s) => !keys.has(s.dedupe_key) && !s.read_at)]
+  // Mesmo ativo + mesmo tipo: só o mais recente (o mesmo alerta de dias diferentes não se repete).
+  const seen = new Set(derived.map((d) => `${d.ticker}|${d.kind}`));
+  const older = [...stored].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+    .filter((s) => !keys.has(s.dedupe_key) && !s.read_at && !seen.has(`${s.ticker}|${s.kind}`) && (seen.add(`${s.ticker}|${s.kind}`), true));
+  return [...derived, ...older]
     .sort((a, b) => sev[a.severity] - sev[b.severity])
     .slice(0, 30);
 }

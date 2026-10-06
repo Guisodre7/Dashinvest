@@ -120,10 +120,14 @@ export function AlertsList({ alerts, extra }: { alerts: AlertRow[]; extra: { sev
 // Carteira
 // ---------------------------------------------------------------------------
 
-export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
+export function PortfolioTable({ portfolio: full, heldOnly = false }: { portfolio: PortfolioSummary; heldOnly?: boolean }) {
+  // Visão enxuta: só o que você tem; os ativos-alvo sem posição viram uma linha.
+  const portfolio = heldOnly ? { ...full, positions: full.positions.filter((p) => p.quantity > 0) } : full;
+  const unheld = heldOnly ? full.positions.filter((p) => !(p.quantity > 0)) : [];
   return (
     <>
-    <ul className="m-list only-mobile" aria-label="Carteira">
+    {heldOnly && portfolio.positions.length === 0 && <div className="card small faint">Nenhuma posição registrada ainda.</div>}
+    <ul className={`m-list only-mobile${heldOnly ? " compact-list" : ""}`} aria-label="Carteira">
       {portfolio.positions.map((p) => (
         <li key={p.ticker}>
           <Link href={assetHref(p.ticker)} className="m-row">
@@ -197,6 +201,11 @@ export function PortfolioTable({ portfolio }: { portfolio: PortfolioSummary }) {
         </tbody>
       </table>
     </div>
+    {unheld.length > 0 && (
+      <p className="xsmall muted" style={{ marginTop: 8 }}>
+        Na estratégia, ainda sem posição: {unheld.map((p, i) => <span key={p.ticker}>{i ? ", " : ""}<Link href={assetHref(p.ticker)}>{p.ticker}</Link> ({n(p.targetWeight, 1)}%)</span>)}.
+      </p>
+    )}
     </>
   );
 }

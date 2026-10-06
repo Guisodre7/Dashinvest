@@ -21,3 +21,14 @@ describe("indicadores", () => {
     expect(dd.band).toBe("20-30%");
   });
 });
+
+describe("máxima de 52 semanas incoerente do fornecedor", () => {
+  it("BRK.B com a máxima da classe A (US$ 760 mil) é descartada em favor do histórico", async () => {
+    const { computeDrawdown } = await import("@/lib/analysis/indicators");
+    const bars = Array.from({ length: 250 }, (_, i) => ({ time: `d${i}`, open: 480, high: 500 + (i === 100 ? 30 : 0), low: 470, close: 490, volume: 1 }));
+    const dd = computeDrawdown(bars, 507, { week52High: 760_000, week52Low: 470 });
+    expect(dd.from_52w_high).toBeCloseTo((507 / 530 - 1) * 100, 1);
+    const noHist = computeDrawdown([], 507, { week52High: 760_000, week52Low: 400 });
+    expect(noHist.from_52w_high).toBeNull();
+  });
+});

@@ -52,6 +52,14 @@ describe("Câmbio gratuito (AwesomeAPI + Banco Central)", () => {
     expect(fx.timestamp).toBe(new Date("2026-09-30T17:00:00-03:00").toISOString());
   });
 
+  it("sem AwesomeAPI e sem Banco Central (bloqueio fora do Brasil), usa a referência do BCE", () => {
+    const rates = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`2026-09-${String(i + 1).padStart(2, "0")}`, { BRL: 5 + i * 0.01 }]));
+    const fx = combineFx("USDBRL", null, null, { rates });
+    expect(fx.source).toBe("bce (frankfurter)");
+    expect(fx.rate).toBeCloseTo(5.29);
+    expect(fx.change_1m).not.toBeNull();
+  });
+
   it("sem nenhuma fonte, lança erro em vez de inventar câmbio", () => {
     expect(() => combineFx("USDBRL", null, null)).toThrow();
   });

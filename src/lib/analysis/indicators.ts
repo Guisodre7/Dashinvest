@@ -193,8 +193,14 @@ export function computeDrawdown(
     return s.length ? Math.max(...s.map((b) => b.high), last) : null;
   };
   const year = bars.slice(-252);
-  const h52 = opts.week52High ?? (year.length >= 200 ? Math.max(...year.map((b) => b.high)) : null);
-  const l52 = opts.week52Low ?? (year.length >= 200 ? Math.min(...year.map((b) => b.low)) : null);
+  const histH = year.length >= 120 ? Math.max(...year.map((b) => b.high)) : null;
+  const histL = year.length >= 120 ? Math.min(...year.map((b) => b.low)) : null;
+  // Máxima/mínima do fornecedor só vale se for coerente com o histórico (ex.: BRK.B
+  // recebendo a máxima da classe A). Sem histórico suficiente, também confere com o preço.
+  const sane = (v: number | null | undefined, ref: number | null) =>
+    v != null && v > 0 && (ref !== null ? v / ref >= 0.8 && v / ref <= 1.25 : v / last >= 0.2 && v / last <= 5);
+  const h52 = histH ?? (sane(opts.week52High, null) ? opts.week52High! : null);
+  const l52 = histL ?? (sane(opts.week52Low, null) ? opts.week52Low! : null);
   const ath = bars.length ? Math.max(...bars.map((b) => b.high), last, h52 ?? 0) : h52;
   const dd = (h: number | null) => (h ? Math.min(0, pct(last, h)) : null);
   const from52 = dd(h52 !== null ? Math.max(h52, last) : null);

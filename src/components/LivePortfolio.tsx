@@ -58,8 +58,8 @@ export function LivePortfolioKpis() {
   );
 }
 
-export function LivePortfolioTable() {
-  return <PortfolioTable portfolio={useLivePortfolio()} />;
+export function LivePortfolioTable({ heldOnly = false }: { heldOnly?: boolean }) {
+  return <PortfolioTable portfolio={useLivePortfolio()} heldOnly={heldOnly} />;
 }
 
 /** Valor de uma posição com o preço ao vivo (página do ativo). */

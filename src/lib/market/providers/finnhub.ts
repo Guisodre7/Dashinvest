@@ -1,6 +1,7 @@
 import "server-only";
 import { buildMeta } from "../freshness";
 import { getJson, HttpError, toNum } from "../http";
+import { memo } from "../memo";
 import { statusAt } from "../marketStatus";
 import type { Capability, EtfProfile, FxRate, MarketDataProvider } from "../provider";
 import {
@@ -55,9 +56,7 @@ export class FinnhubProvider implements MarketDataProvider {
 
   async getQuote(ticker: string): Promise<Quote> {
     const [q, profile, metric] = await Promise.all([
-      this.get<{ c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number }>(
-        // 5s de cache compartilhado; o timestamp da cotação continua sendo o do fornecedor.
-        "/quote", { symbol: symbol(ticker) }, 5, ticker),
+      this.liveQuote(ticker),
       this.optional<{ name?: string }>("/stock/profile2", { symbol: symbol(ticker) }, 86_400, ticker).catch(() => null),
       this.metrics(ticker).catch(() => null),
     ]);
@@ -86,6 +85,17 @@ export class FinnhubProvider implements MarketDataProvider {
       session: status === "OPEN" || status === "CLOSED" ? "REGULAR" : "EXTENDED",
       meta: buildMeta({ timestamp, source: NAME, is_realtime: this.realtime }),
     };
+  }
+
+  /**
+   * Cotação sem o cache de dados do Next: nele, um item vencido é entregue
+   * uma vez ANTES de ser renovado (stale-while-revalidate), o que mostrava
+   * preço de meia hora atrás na primeira abertura. Aqui: 8s em memória por
+   * instância (respeita o limite de 60/min) e sempre o timestamp do fornecedor.
+   */
+  private liveQuote(ticker: string) {
+    return memo(`finnhub:quote:${symbol(ticker)}`, 8_000, () =>
+      this.get<{ c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number }>("/quote", { symbol: symbol(ticker) }, 0, ticker));
   }
 
   async getDailyHistory(): Promise<PriceHistory> {
