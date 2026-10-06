@@ -44,3 +44,11 @@ export function snapshotNear(hist: StanceHistory, daysAgo: number, now = new Dat
   const date = older.length ? older[older.length - 1] : dates[0];
   return date === dayBr(now) && dates.length === 1 ? null : { date, snap: hist[date] };
 }
+
+/** Retrato do dia da operação (ou o mais recente até 5 dias antes). */
+export function snapshotOn(hist: StanceHistory | null, date: string, ticker: string): StanceSnap | null {
+  if (!hist) return null;
+  const min = new Date(new Date(`${date}T12:00:00Z`).getTime() - 5 * 86_400_000).toISOString().slice(0, 10);
+  const day = Object.keys(hist).filter((d) => d <= date && d >= min && hist[d][ticker]).sort().pop();
+  return day ? hist[day][ticker] : null;
+}

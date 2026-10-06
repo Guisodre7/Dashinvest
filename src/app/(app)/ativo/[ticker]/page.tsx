@@ -5,12 +5,14 @@ import { LiveChange, LiveFreshness, LivePrice, LiveQuotesProvider } from "@/comp
 import { LivePositionValue } from "@/components/LivePortfolio";
 import LadderPlanner from "@/components/LadderPlanner";
 import PriceChart from "@/components/PriceChart";
+import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
 import StaleRefresher from "@/components/StaleRefresher";
 import { Kpi, ScoreBadge } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { LADDER_KEY, loadStances, type Ladders } from "@/lib/data/stances";
+import { HISTORY_KEY, LADDER_KEY, loadStances, snapshotOn, type Ladders, type StanceHistory } from "@/lib/data/stances";
+import { getTheses } from "@/lib/data/theses";
 import { compact, dateBr, dateTimeEt, n, pct, pp, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 import { getMarketDataProvider } from "@/lib/market";
@@ -27,13 +29,18 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
   if (!a) notFound();
 
   const provider = getMarketDataProvider();
-  const [etfProfile, dividends, lastRec, st, ladders] = await Promise.all([
+  const [etfProfile, dividends, lastRec, st, ladders, hist, txs, theses] = await Promise.all([
     a.isEtf ? provider.getEtfProfile(ticker).catch(() => null) : null,
     provider.getDividends(ticker).catch(() => null),
     ctx.repo.getLatestRecommendation().catch(() => null),
     loadStances(ctx, ctx.repo),
     ctx.repo.getSetting<Ladders>(LADDER_KEY).catch(() => null),
+    ctx.repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null),
+    ctx.repo.getTransactions(1000).catch(() => []),
+    getTheses(ctx.repo),
   ]);
+  const thesis = theses.find((t) => t.ticker === ticker && t.status === "ativa");
+  const buys = txs.filter((t) => t.ticker === ticker && t.kind === "buy" && t.price).map((t) => ({ date: t.trade_date, price: t.price!, quantity: t.quantity, snap: snapshotOn(hist, t.trade_date, ticker) }));
   const stance = st.stances.find((x) => x.ticker === ticker)!;
   const position = ctx.portfolio.positions.find((p) => p.ticker === ticker);
   const recLine = lastRec?.lines.find((l) => l.ticker === ticker);
@@ -98,6 +105,18 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
             quantity={position.quantity} avgCost={position.costUsd / position.quantity} fee={st.tax.US.feePerOrder} taxRate={st.tax.US.gainTaxRate}
             saved={ladders?.[ticker] ?? null} />
         ) : <div className="card small muted">{a.strategy.is_legacy ? "Posição legada: fora de planos de venda/recompra." : "Sem posição: a escada de venda e recompra fica disponível quando houver cotas."}</div>}
+      </section>
+
+      <section className="section grid grid-2">
+        <div className="card stack">
+          <h3>Decidir</h3>
+          <div className="row-wrap">
+            <Link className="btn btn-primary btn-sm" href={`/analisar?mercado=US&ativo=${encodeURIComponent(ticker)}`}>Analisar compra</Link>
+            {thesis ? <Link className="btn btn-sm" href={`/teses/${thesis.id}`}>Minha tese</Link> : <Link className="btn btn-sm" href={`/teses?nova=1&mercado=US&ativo=${encodeURIComponent(ticker)}&preco=${lastPrice ? lastPrice.toFixed(2) : ""}&banda=${stance.band ?? ""}&qualidade=${stance.quality}`}>Escrever minha tese</Link>}
+          </div>
+          {thesis && <p className="small muted">“{thesis.text.slice(0, 180)}{thesis.text.length > 180 ? "…" : ""}”{thesis.reviews[0] ? ` — última revisão: ${thesis.reviews[0].conclusion}` : ""}</p>}
+        </div>
+        <EntryReviewList buys={buys} now={{ price: lastPrice, band: stance.band, thesis: stance.thesis }} cur="US$" />
       </section>
 
       <section className="section card">

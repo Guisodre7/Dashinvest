@@ -35,7 +35,7 @@ export default async function OportunidadesPage() {
         <div>
           <h1>Oportunidades agora</h1>
           <p className="muted small">Qualidade do ativo + faixa de valuation + tese + peso na carteira. Variação de preço não é valuation; nada aqui é ordem. Horizonte: semanas a anos, não day trade.</p>
-          <p className="small"><Link href="/mudancas">O que mudou?</Link> · <Link href="/estrategia">Pesos-alvo (Estratégia)</Link> · <Link href="/notificacoes">Notificações</Link></p>
+          <p className="small"><Link href="/analisar">Analisar compra</Link> · <Link href="/teses">Minhas teses</Link> · <Link href="/mudancas">O que mudou?</Link> · <Link href="/estrategia">Pesos-alvo (Estratégia)</Link> · <Link href="/notificacoes">Notificações</Link></p>
         </div>
       </section>
 

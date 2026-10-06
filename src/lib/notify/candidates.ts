@@ -1,5 +1,6 @@
 import type { AssetAnalysis } from "../analysis/analyze";
 import type { Stance } from "../analysis/stance";
+import type { Thesis } from "../thesis/logic";
 import type { MacroIndicator } from "../market/types";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
 import type { Candidate } from "./rules";
@@ -227,6 +228,23 @@ export function ladderCandidates(
       body: `Preço ${money(p)} chegou ao degrau de ${money(rebuyHit.price)} do seu plano (recomprar ~${rebuyHit.pct}% do vendido). Confirme se a tese segue preservada.`,
       publicBody: `${t} chegou a um degrau de recompra do seu plano. Toque para ver a análise.`,
       reason: "Estratégia de escada (plano salvo)",
+    });
+  }
+  return out;
+}
+
+/** Tese registrada + dados indicando deterioração → revisar premissas (link para a tese). */
+export function thesisCandidates(theses: Thesis[], stances: Stance[]): Candidate[] {
+  const out: Candidate[] = [];
+  for (const t of theses.filter((x) => x.status === "ativa")) {
+    const s = stances.find((x) => x.ticker === t.ticker);
+    if (!s || s.thesis !== "deteriorada") continue;
+    out.push({
+      category: "thesis", priority: "critical", market: t.market, ticker: t.ticker, url: `/teses/${t.id}`, key: `${t.ticker}:journal:${t.id}:deteriorada`,
+      title: `Mudança potencial de tese: ${t.ticker}`,
+      body: `Novo evento pode alterar uma das premissas da sua tese (${t.premises.slice(0, 2).join("; ")}${t.premises.length > 2 ? "…" : ""}). ${s.headline} Análise necessária.`,
+      publicBody: `Novo evento pode alterar uma das premissas da sua tese sobre ${t.ticker}. Análise necessária.`,
+      reason: "Tese ativa + sinais de deterioração dos fundamentos",
     });
   }
   return out;

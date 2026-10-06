@@ -8,7 +8,8 @@ import { loadContext } from "../data/load";
 import type { NotificationRow, Repo } from "../db/repo";
 import { parseTaxSettings, usStances } from "../analysis/stanceInput";
 import { LADDER_KEY, recordStanceHistory, TAX_KEY, type Ladders } from "../data/stances";
-import { brCandidates, ladderCandidates, macroCandidates, stanceCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
+import { getTheses } from "../data/theses";
+import { brCandidates, ladderCandidates, thesisCandidates, macroCandidates, stanceCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
 import { decide, groupPushes, inQuietHours, parsePrefs, type Candidate, type Decision, type NotifyPrefs, type PushMessage } from "./rules";
 
 export const PREFS_KEY = "notify_prefs";
@@ -110,14 +111,17 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   ]);
   const stances = usStances(ctx.analyses, ctx.portfolio, transactions, parseTaxSettings(rawTax), now);
   const prices = Object.fromEntries(ctx.analyses.map((a) => [a.ticker, a.price]));
-  await recordStanceHistory(repo, stances, prices, now).catch(() => undefined);
   const brs = await loadBrStances(br, repo).catch(() => ({ views: [], errors: {} }));
+  // Retrato diário também da carteira Brasil (para "O que mudou?" e "foi uma boa entrada?").
+  await recordStanceHistory(repo, [...stances, ...brs.views.map((v) => v.stance)], { ...prices, ...Object.fromEntries(brs.views.map((v) => [v.code, v.price])) }, now).catch(() => undefined);
+  const theses = await getTheses(repo);
   const candidates: Candidate[] = [
     ...usCandidates(ctx.analyses, now), ...stanceCandidates(stances, { market: "US" }),
     ...stanceCandidates(brs.views.map((v) => v.stance), { market: "BR", currency: "R$", url: (t) => `/brasil?aba=valuation#br-${t}`, opportunities: true }), ...ladderCandidates(ladders ?? {}, prices, {
       held: (t) => (ctx.portfolio.positions.find((x) => x.ticker === t)?.quantity ?? 0) > 0,
       lastSellDate: (t) => transactions.filter((x) => x.kind === "sell" && x.ticker === t).map((x) => x.trade_date).sort().pop() ?? null,
     }),
+    ...thesisCandidates(theses, [...stances, ...brs.views.map((v) => v.stance)]),
     ...brCandidates(br.summary), ...macroCandidates(ctx.macro),
   ];
   const history = await repo.notificationHistory(30);

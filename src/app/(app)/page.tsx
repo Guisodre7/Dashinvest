@@ -71,6 +71,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </section>
       <section className="grid grid-4 kpis-compact"><LivePortfolioKpis /></section>
 
+      <div className="row-wrap" style={{ marginTop: 12 }}>
+        <Link href="/analisar" className="btn btn-primary btn-sm">🔎 Analisar nova compra</Link>
+        <Link href="/teses" className="btn btn-sm">📓 Minhas teses</Link>
+      </div>
+
       <nav className="tabs dash-tabs" aria-label="Seções do painel">
         {TABS.map((t) => (
           <Link key={t.key} href={t.key === "resumo" ? "/" : `/?aba=${t.key}`} scroll={false} aria-current={tab === t.key ? "page" : undefined}>

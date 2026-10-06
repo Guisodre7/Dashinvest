@@ -2,12 +2,14 @@ import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
 import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
+import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
 import LedgerForm from "@/components/LedgerForm";
 import { Kpi, WeightBar } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
 import { loadBrStances } from "@/lib/data/brStances";
+import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, pp, tone } from "@/lib/format";
 import { humanAge } from "@/lib/market/freshness";
@@ -28,6 +30,11 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   const br = await loadBrazil(repo);
   // Fundamentos só quando a aba de valuation é aberta (mais rápido no resto).
   const brs = tab === "valuation" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
+  const hist = tab === "valuation" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
+  const brBuys = tab === "valuation" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
+    const v = brs.views.find((x) => x.code === e.code);
+    return { ticker: e.code, date: e.trade_date, price: e.price!, quantity: e.quantity, snap: snapshotOn(hist, e.trade_date, e.code), now: { price: v?.price ?? null, band: v?.stance.band ?? null, thesis: v?.stance.thesis ?? "não verificável" as const } };
+  }) : [];
   const { summary: s, strategy, quotes } = br;
   const month = new Date().toISOString().slice(0, 7);
   const monthIn = br.entries.filter((e) => e.trade_date.startsWith(month) && (e.kind === "buy" || e.kind === "contribution")).reduce((a, e) => a + e.amount + e.fees, 0);
@@ -53,7 +60,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
 
       <section className="hero">
         <div>
-          <div className="hero-title">🇧🇷 Carteira Brasil</div>
+          <div className="hero-title">🇧🇷 Carteira Brasil · <Link href="/analisar?mercado=BR">Analisar nova compra</Link> · <Link href="/teses">Minhas teses</Link></div>
           <div className="hero-value num">{brl(s.currentValue)}</div>
           <div className="row-wrap small muted">
             <span>Capital aportado líquido <strong className="num">{brl(s.netContributed)}</strong></span>
@@ -118,6 +125,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
             </StanceCard>
           ))}
         </div>
+        {brBuys.length > 0 && <div style={{ marginTop: 14 }}><EntryReviewList buys={brBuys} cur="R$" /></div>}
       </section>
 
         </>

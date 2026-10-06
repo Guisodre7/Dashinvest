@@ -137,6 +137,8 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
   ]);
   const allTickers = [...new Set([...strategy.map((s) => s.ticker), ...positions.map((p) => p.ticker)])];
   const tickers = tickersOpt ?? allTickers;
+  // Ativos fora da estratégia (ex.: analisar a compra de um novo ativo) também são analisados.
+  const universe = [...new Set([...allTickers, ...tickers])];
 
   const from = now.toISOString().slice(0, 10);
   const to = new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10);
@@ -147,10 +149,10 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
     safe("Histórico SPY", errors, () => provider.getDailyHistory("SPY")),
     Promise.all((["SPY", "QQQ", "DIA", "UUP"] as const).map((t) => safe(`Cotação ${t}`, errors, () => provider.getQuote(t)))),
     safe("Notícias de mercado", errors, () => provider.getMarketNews()),
-    safe("Calendário de earnings", errors, () => provider.getEvents(allTickers, from, to)),
+    safe("Calendário de earnings", errors, () => provider.getEvents(universe, from, to)),
   ]);
 
-  const perTicker = await Promise.all(allTickers.map(async (ticker) => {
+  const perTicker = await Promise.all(universe.map(async (ticker) => {
     const meta = assetMeta(ticker);
     const tErr: string[] = [];
     const deep = tickers.includes(ticker);

@@ -96,6 +96,21 @@ Princípio: separar **qualidade do ativo**, **valor (faixa de valuation)** e **p
 - **Postura**: mesmo motor da carteira internacional; meta por ativo = meta da classe ÷ nº de ativos; impostos de ações BR/FIIs. Tese "não verificável" (sem estimativas de lucro na fonte gratuita) é dita explicitamente.
 - **Telas e alertas**: aba Valuation em `/brasil` e cards em `/oportunidades`; notificações de oportunidade, realização e recompra também para a B3.
 
+## Analisar compra, Minhas teses e "foi uma boa entrada?" (passo 6)
+
+- **`/analisar`** (EUA ou B3, inclusive fora da estratégia): mostra
+  - minha posição antes → depois da compra (quantidade, preço médio, peso × meta);
+  - preço atual e distância da máxima/mínima;
+  - faixa de valuation, fundamentos, crescimento esperado, notícias e eventos;
+  - tese (a sua e os argumentos dos dados), riscos;
+  - **veredito**: 🟢 compra atrativa / 🟡 parcial (com entrada em partes) / 🟠 esperar melhor preço / 🔴 não aumentar / ⚪ dados insuficientes.
+  - Preço opcional para simular. Regras em `src/lib/thesis/logic.ts`.
+- **`/teses`**: tese, premissas (uma por linha), expectativa, riscos, "o que me faria mudar de ideia", horizonte, e o contexto do dia (preço, faixa, qualidade).
+  - A revisão compara "o que eu acreditava × o que os dados mostram hoje" e avalia cada premissa (mantida/enfraquecida/quebrada) → tese preservada / parcialmente / significativamente comprometida.
+  - Fica em `app_settings.theses`.
+- **Alerta de tese**: tese ativa + sinais de deterioração → notificação crítica com link para a tese.
+- **Foi uma boa entrada?** (página do ativo e aba Valuation da carteira Brasil): cada compra é julgada pelo retrato diário da análise na data (`stance_history`, agora também da B3), não pelo resultado. Compra racional que caiu continua boa decisão; compra esticada que subiu continua arriscada.
+
 ## Notificações no iPhone (Web Push, gratuito)
 
 "Monitorar muito, notificar pouco, explicar bem." Preço subindo ou caindo sozinho nunca gera push.

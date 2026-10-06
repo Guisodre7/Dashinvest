@@ -31,13 +31,17 @@ export function fairFromAnalysis(a: AssetAnalysis): StanceInput["fair"] {
 
 /** Postura de cada ativo da carteira internacional. */
 export function usStances(analyses: AssetAnalysis[], portfolio: PortfolioSummary, transactions: TransactionRow[], tax: TaxSettings, now = new Date()): Stance[] {
+  return analyses.map((a) => computeStance(usStanceInput(a, portfolio, transactions, tax, now)));
+}
+
+export function usStanceInput(a: AssetAnalysis, portfolio: PortfolioSummary, transactions: TransactionRow[], tax: TaxSettings, now = new Date()): StanceInput {
   const since = new Date(now.getTime() - 548 * 86_400_000).toISOString().slice(0, 10); // ~18 meses
-  return analyses.map((a) => {
+  {
     const p = portfolio.positions.find((x) => x.ticker === a.ticker);
     const sell = transactions
       .filter((t) => t.kind === "sell" && t.ticker === a.ticker && t.trade_date >= since && t.price && t.quantity)
       .sort((x, y) => y.trade_date.localeCompare(x.trade_date))[0];
-    return computeStance({
+    return {
       ticker: a.ticker, isEtf: a.isEtf, isLegacy: a.strategy.is_legacy, price: a.price, fair: fairFromAnalysis(a),
       qualityScore: a.quality?.score ?? null, qualityCoverage: a.quality?.coverage ?? 0,
       signalKinds: a.signals.map((s) => s.kind),
@@ -48,6 +52,6 @@ export function usStances(analyses: AssetAnalysis[], portfolio: PortfolioSummary
       position: p && p.quantity > 0 ? { quantity: p.quantity, avgCost: p.quantity ? p.costUsd / p.quantity : p.avgPrice, value: p.valueUsd ?? 0 } : null,
       lastSell: sell ? { date: sell.trade_date, price: sell.price!, quantity: sell.quantity! } : null,
       tax: tax.US, currency: "US$",
-    });
-  });
+    };
+  }
 }

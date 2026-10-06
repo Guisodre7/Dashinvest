@@ -33,7 +33,16 @@ export function brStances(
     ...enabled.map((a) => a.code),
     ...summary.holdings.filter((h) => (h.asset_class === "acao" || h.asset_class === "fii") && h.quantity > 0).map((h) => h.code),
   ])];
-  return codes.map((code) => {
+  return codes.map((code) => brStanceOne(code, strategy, summary, entries, quotes, fundamentals, tax, since));
+}
+
+/** Postura de um único ativo da B3 (também para ativos fora da estratégia, ex.: analisar compra). */
+export function brStanceOne(
+  code: string, strategy: BrStrategy, summary: PortfolioLedgerSummary, entries: LedgerEntry[],
+  quotes: Record<string, Quote | null>, fundamentals: Record<string, BrFundamentals>, tax: TaxSettings,
+  since = new Date(Date.now() - 548 * 86_400_000).toISOString().slice(0, 10),
+): BrStanceView {
+  const enabled = strategy.assets.filter((a) => a.enabled);
     const asset = enabled.find((a) => a.code === code);
     const h = summary.holdings.find((x) => x.code === code);
     const f = fundamentals[code] ?? null;
@@ -56,5 +65,4 @@ export function brStances(
     });
     if (!fair && reason) stance.reasons.push(reason);
     return { stance, code, assetClass: cls, name: asset?.name ?? h?.name ?? f?.name ?? null, price, fundamentals: f, methods, fairReason: reason, qualityNotes: q.notes };
-  });
 }
