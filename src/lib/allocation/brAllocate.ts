@@ -2,11 +2,15 @@ import type { ActionKey, Stance } from "../analysis/stance";
 import type { BrStrategy } from "../portfolio/brStrategy";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
 
-export interface BrAllocLine { label: string; code: string | null; assetClass: "renda_fixa" | "acao" | "fii" | "caixa"; amount: number; reason: string }
+export interface BrAllocLine { label: string; code: string | null; assetClass: "renda_fixa" | "acao" | "fii" | "caixa"; amount: number; reason: string; stance: ActionKey | null }
 export interface BrAllocation { amount: number; lines: BrAllocLine[]; classSplit: { assetClass: "renda_fixa" | "acao" | "fii"; amount: number; why: string }[]; notes: string[] }
 
-/** Peso de cada postura na divisão dentro da classe. */
-const ACTION_WEIGHT: Partial<Record<ActionKey, number>> = { comprar: 1.5, recompra: 1.5, manter: 1, aguardar: 0.5 };
+/**
+ * Peso de cada postura na divisão dentro da classe: só prioridade média (manter,
+ * preço razoável) ou alta (oportunidade) recebe, e a alta recebe o dobro.
+ * Esticados, tese em risco ou sem dados de valuation esperam.
+ */
+const ACTION_WEIGHT: Partial<Record<ActionKey, number>> = { comprar: 2, recompra: 2, manter: 1 };
 const r10 = (v: number) => Math.round(v / 10) * 10;
 
 /**
@@ -33,7 +37,7 @@ export function allocateBr(amount: number, summary: PortfolioLedgerSummary, stra
 
   const lines: BrAllocLine[] = [];
   const notes: string[] = [];
-  if (classAmt.renda_fixa >= 1) lines.push({ label: "Renda fixa", code: null, assetClass: "renda_fixa", amount: classAmt.renda_fixa, reason: "Escolha o título/fundo (CDB, Tesouro, fundo DI) — a renda fixa não passa pela análise de valuation." });
+  if (classAmt.renda_fixa >= 1) lines.push({ label: "Renda fixa", code: null, assetClass: "renda_fixa", amount: classAmt.renda_fixa, reason: "Escolha o título/fundo (CDB, Tesouro, fundo DI) — a renda fixa não passa pela análise de valuation.", stance: null });
 
   for (const c of ["acao", "fii"] as const) {
     const amt = classAmt[c];
@@ -42,26 +46,29 @@ export function allocateBr(amount: number, summary: PortfolioLedgerSummary, stra
     const target = strategy.classes[c] / (enabled.length || 1);
     const cands = enabled.map((a) => {
       const v = stances.find((s) => s.code === a.code);
-      const w = v ? ACTION_WEIGHT[v.stance.action] ?? 0 : 0.5;
+      const w = v ? ACTION_WEIGHT[v.stance.action] ?? 0 : 0;
       const weightNow = summary.holdings.find((h) => h.code === a.code)?.weight ?? 0;
       const under = target > 0 ? Math.max(0, target - weightNow) / target : 0;
-      return { a, v, score: w * (1 + under) };
+      // Já na meta ou acima: espera (o aporte não concentra a carteira).
+      const full = summary.currentValue > 0 && target > 0 && weightNow >= target;
+      return { a, v, score: full ? 0 : w * (1 + under) };
     }).filter((x) => x.score > 0);
     const sum = cands.reduce((s, x) => s + x.score, 0);
     if (!sum) {
-      if (enabled.length) notes.push(`Sem aporte agora (esticados ou com tese em risco): ${enabled.map((a) => a.code).join(", ")}.`);
-      lines.push({ label: `Caixa de oportunidade (${CLASS_LABEL[c]})`, code: null, assetClass: "caixa", amount: amt, reason: `Nenhum ativo de ${CLASS_LABEL[c].toLowerCase()} em faixa razoável agora: guardar e aportar quando houver preço melhor.` });
+      if (enabled.length) notes.push(`Sem aporte agora (esticados, tese em risco, sem dados ou já na meta): ${enabled.map((a) => a.code).join(", ")}.`);
+      lines.push({ label: `Caixa de oportunidade (${CLASS_LABEL[c]})`, code: null, assetClass: "caixa", amount: amt, reason: `Nenhum ativo de ${CLASS_LABEL[c].toLowerCase()} em faixa razoável agora: guardar e aportar quando houver preço melhor.`, stance: null });
       continue;
     }
     for (const x of cands) {
       const action = x.v?.stance.action;
       lines.push({
         label: x.a.code, code: x.a.code, assetClass: c, amount: amt * x.score / sum,
-        reason: action === "comprar" || action === "recompra" ? "Faixa de valuation atrativa." : action === "manter" ? "Preço razoável." : "Sem dados de valuation: participação reduzida.",
+        reason: action === "comprar" || action === "recompra" ? "Faixa de valuation atrativa: prioridade alta." : "Preço razoável: aporte normal.",
+        stance: action ?? null,
       });
     }
     const skipped = enabled.filter((a) => !cands.some((x) => x.a.code === a.code)).map((a) => a.code);
-    if (skipped.length) notes.push(`Sem aporte agora (esticados ou com tese em risco): ${skipped.join(", ")}.`);
+    if (skipped.length) notes.push(`Sem aporte agora (esticados, tese em risco, sem dados ou já na meta): ${skipped.join(", ")}.`);
   }
 
   // Ordens pequenas demais (< R$ 50) são redistribuídas; arredonda a R$ 10.

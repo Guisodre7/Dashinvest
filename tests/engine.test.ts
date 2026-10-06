@@ -110,6 +110,19 @@ describe("motor de alocação", () => {
     expect(r.opportunityCash).toBeGreaterThan(0);
   });
 
+  it("respeita o valuation: caro (não aumentar) espera; oportunidade recebe mais com prioridade alta", () => {
+    const a = analyzeAsset(input("A", flat, { currentWeight: 30, targetWeight: 33 }), settings);
+    const b = analyzeAsset(input("B", flat, { currentWeight: 30, targetWeight: 33 }), settings);
+    const c = analyzeAsset(input("C", flat, { currentWeight: 40, targetWeight: 34 }), settings);
+    const r = allocate({ contribution: 600, analyses: [a, b, c], values: { A: 3000, B: 3000, C: 4000 }, existingOpportunityCash: 0, settings, stances: { A: "comprar", B: "manter", C: "nao_aumentar" } });
+    const la = r.lines.find((l) => l.ticker === "A")!, lb = r.lines.find((l) => l.ticker === "B")!, lc = r.lines.find((l) => l.ticker === "C")!;
+    expect(lc).toMatchObject({ amount: 0, action: "AGUARDAR", priority: "BAIXA" });
+    expect(lc.why).toMatch(/não é momento de aumentar/);
+    expect(la).toMatchObject({ action: "COMPRAR", priority: "ALTA" });
+    expect(la.amount).toBeGreaterThan(lb.amount);
+    expect(lb.priority).toBe("MÉDIA");
+  });
+
   it("não acumula caixa além do limite", () => {
     const bad = analyzeAsset(input("A", flatThenDrop, { estimates: est(-5, -10), currentWeight: 40, targetWeight: 50 }), settings);
     const ok = analyzeAsset(input("B", flat, { currentWeight: 60, targetWeight: 50 }), settings);

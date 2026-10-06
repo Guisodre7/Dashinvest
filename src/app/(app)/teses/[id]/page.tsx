@@ -19,7 +19,7 @@ export default async function ThesisPage({ params }: { params: Promise<{ id: str
   const cur = t.market === "BR" ? "R$" : "US$";
   const change = t.price && d.price ? (d.price / t.price - 1) * 100 : null;
   const last = t.reviews[0];
-  const assetHref = t.market === "US" ? `/ativo/${encodeURIComponent(t.ticker)}#realizacao` : `/brasil?aba=valuation#br-${t.ticker}`;
+  const assetHref = t.market === "US" ? `/ativo/${encodeURIComponent(t.ticker)}#realizacao` : `/brasil?aba=aporte#br-${t.ticker}`;
 
   return (
     <div className="stack" style={{ gap: 0 }}>

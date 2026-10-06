@@ -29,13 +29,13 @@ export function BandBar({ s, price, cur }: { s: Stance; price: number | null; cu
   );
 }
 
-export default function StanceCard({ s, price, cur = "US$", name, compact = false, position, href, children }: {
-  s: Stance; price: number | null; cur?: string; name?: string; compact?: boolean; href?: string; children?: React.ReactNode;
+export default function StanceCard({ s, price, cur = "US$", name, compact = false, position, href, anchorId, children }: {
+  s: Stance; price: number | null; cur?: string; name?: string; compact?: boolean; href?: string; anchorId?: string; children?: React.ReactNode;
   position?: { quantity: number; avgCost: number; value: number | null; realized: number } | null;
 }) {
   const meta = ACTION_META[s.action];
   return (
-    <div className="card stack stance" id={compact ? (href?.includes("#") ? href.split("#")[1] : undefined) : "realizacao"}>
+    <div className="card stack stance" id={compact ? anchorId : "realizacao"}>
       <div className="row-between">
         <div>
           <strong>{compact ? <Link href={href ?? `/ativo/${encodeURIComponent(s.ticker)}#realizacao`}>{s.ticker}</Link> : "Valuation e decisão"}</strong>

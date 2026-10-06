@@ -40,6 +40,17 @@ describe("aporte da carteira Brasil", () => {
   });
 });
 
+describe("aporte Brasil por prioridade", () => {
+  it("só prioridade média ou alta recebe; alta recebe o dobro; sem dados espera", () => {
+    const r = allocateBr(2000, summary(10000, 0, 0), strategy, [st("ITUB4", "acao", 85), st("PETR4", "acao", 100), st("HGLG11", "fii", 140)]);
+    const itub = r.lines.find((l) => l.code === "ITUB4")!, petr = r.lines.find((l) => l.code === "PETR4")!;
+    expect(itub.stance).toBe("comprar");
+    expect(itub.amount).toBeGreaterThan(petr.amount * 1.5);
+    expect(r.lines.some((l) => l.code === "HGLG11" || l.code === "KNRI11")).toBe(false); // esticado e sem dados
+    expect(r.lines.find((l) => l.assetClass === "caixa")).toBeDefined();
+  });
+});
+
 describe("divisão mensal Brasil × Exterior", () => {
   const base = { totalBrl: 5000, brValue: 50000, usValueBrl: 50000, targetBrPct: 50, fxRate: 5, fxChange1m: 0, brOpportunities: 0, usOpportunities: 0 };
   it("na meta e sem contexto especial: metade para cada lado", () => {

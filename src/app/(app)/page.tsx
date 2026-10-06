@@ -3,12 +3,14 @@ import ContributionForm from "@/components/ContributionForm";
 import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
-import { AlertsList, WhereToInvest } from "@/components/sections";
+import StanceCard from "@/components/StanceCard";
+import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
+import { AlertsList, RadarTable } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
 import { ACTION_META } from "@/lib/analysis/stance";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { loadStances } from "@/lib/data/stances";
+import { loadStances, stanceActions } from "@/lib/data/stances";
 import { dateBr, pct, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 
@@ -39,7 +41,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const [savedAmount, previous, st] = await Promise.all([
     needsAllocation ? ctx.repo.getSetting<number>("default_contribution").catch(() => null) : null,
     tab === "aporte" ? ctx.repo.getLatestRecommendation().catch(() => null) : null,
-    tab === "resumo" ? loadStances(ctx, ctx.repo) : null,
+    needsAllocation ? loadStances(ctx, ctx.repo) : null,
   ]);
   // Valor vindo do plano mensal (Visão geral) tem prioridade sobre o padrão salvo.
   const fromPlan = Number(String(valor ?? "").replace(",", "."));
@@ -48,7 +50,29 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     contribution: defaultAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
     existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
+    stances: st ? stanceActions(st.stances) : undefined,
   }) : null;
+  // "Onde aportar": todo o radar (estratégia + legado), com o valuation de cada ativo dentro da linha.
+  const board: BoardRow[] = tab === "aporte" ? analyses.filter((a) => a.strategy.enabled || a.strategy.is_legacy).map((a) => {
+    const stance = st?.stances.find((x) => x.ticker === a.ticker) ?? null;
+    const line = preview?.lines.find((l) => l.ticker === a.ticker);
+    const waitWhy = line && line.amount <= 0 ? line.why.match(/aguardar \((.+)\)\./)?.[1] : undefined;
+    return {
+      id: `us-${a.ticker}`, ticker: a.ticker, bucket: a.strategy.is_legacy ? "Legado" : a.strategy.strategy_bucket,
+      priority: a.strategy.is_legacy ? "BAIXA" : line ? line.priority : priorityFromStance(stance?.action, a.currentWeight, a.targetWeight),
+      stance, current: a.currentWeight, target: a.targetWeight,
+      note: a.strategy.is_legacy ? "Posição legada: não recebe aporte." : [stance?.headline, waitWhy ? `Espera: ${waitWhy}.` : !line && overTarget(a.currentWeight, a.targetWeight) ? "Espera: já na meta ou acima." : null].filter(Boolean).join(" ") || "Sem dados suficientes para valuation.",
+      detail: (
+        <>
+          {stance ? <StanceCard s={stance} price={a.price} name={a.name} compact href={`/ativo/${encodeURIComponent(a.ticker)}#realizacao`} /> : <p className="small faint">Sem faixa de valuation (dados insuficientes).</p>}
+          {a.signals.filter((x) => x.kind !== "STALE_DATA").length > 0 && (
+            <ul className="clean xsmall">{a.signals.filter((x) => x.kind !== "STALE_DATA").slice(0, 3).map((x) => <li key={x.kind} className={x.tone === "positive" ? "pos" : x.tone === "negative" ? "neg" : "muted"}>{x.title}</li>)}</ul>
+          )}
+          <Link href={`/ativo/${encodeURIComponent(a.ticker)}`} className="small">Análise completa de {a.ticker} →</Link>
+        </>
+      ),
+    };
+  }) : [];
   const decisions = (st?.stances ?? []).filter((s) => ["realizacao", "reduzir", "recompra", "comprar", "evitar", "sair"].includes(s.action))
     .sort((a, b) => ["realizacao", "reduzir", "recompra", "sair", "comprar", "evitar"].indexOf(a.action) - ["realizacao", "reduzir", "recompra", "sair", "comprar", "evitar"].indexOf(b.action));
   const fallbackPrices = Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.price]));
@@ -75,7 +99,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <>
           <section className="section grid grid-2">
             <div className="card stack">
-              <div className="row-between"><h3>Decisões agora</h3><Link href="/oportunidades" className="small">Oportunidades →</Link></div>
+              <div className="row-between"><h3>Decisões agora</h3><Link href="/?aba=aporte" scroll={false} className="small">Aporte e valuation →</Link></div>
               {decisions.length === 0 ? <p className="small faint">Nada pede ação: posições em faixa justa ou sem dados suficientes.</p> : (
                 <ul className="decision-list">
                   {decisions.slice(0, 5).map((s) => (
@@ -121,7 +145,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       {tab === "aporte" && (
         <section className="section stack">
           <div className="card"><ContributionForm defaultAmount={defaultAmount} previous={previous} /></div>
-          {preview && <><div className="section-head"><h2>Onde aportar</h2><span className="xsmall faint">prévia para {usd(defaultAmount, 0)} · nenhuma ordem é executada</span></div><WhereToInvest preview={preview} analyses={analyses} /></>}
+          <div className="section-head"><h2>Onde aportar</h2><span className="xsmall faint">todo o radar · toque no ativo para ver o valuation</span></div>
+          {preview?.blocked && <div className="banner banner-warn small">{preview.blockReasons.join(" ")}</div>}
+          <WhereBoard rows={board} />
+          <details className="card">
+            <summary className="small muted">Radar completo (valuation, fundamentos, momentum, analistas, drawdown)</summary>
+            <div style={{ marginTop: 10 }}><RadarTable analyses={analyses} /></div>
+          </details>
         </section>
       )}
 

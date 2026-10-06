@@ -24,6 +24,9 @@ export async function loadStances(ctx: LoadedContext, repo: Repo): Promise<{ sta
   return { stances: usStances(ctx.analyses, ctx.portfolio, transactions, tax), tax, realizedByTicker };
 }
 
+/** Postura por ticker, para o motor de aporte respeitar o valuation. */
+export const stanceActions = (stances: Stance[]) => Object.fromEntries(stances.map((s) => [s.ticker, s.action]));
+
 const dayBr = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 
 /** Grava (1x por dia, sobrescreve o dia) e mantém ~200 dias. */

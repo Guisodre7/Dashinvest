@@ -1,5 +1,6 @@
 import type { AssetAnalysis } from "./analyze";
 import type { EngineSettings } from "./settings";
+import { ACTION_META, type ActionKey } from "./stance";
 
 export type Action = "COMPRAR" | "APORTE NORMAL" | "AGUARDAR";
 export type Priority = "ALTA" | "MÉDIA" | "BAIXA";
@@ -49,7 +50,12 @@ export interface AllocationInput {
   settings: EngineSettings;
   /** Bloqueio global (ex.: câmbio/cotações indisponíveis). */
   globalBlockReasons?: string[];
+  /** Postura de valuation de cada ticker (mesma da tela de valuation). */
+  stances?: Record<string, ActionKey>;
 }
+
+/** Posturas em que o aporte espera: bom ativo caro, realização, tese em risco. */
+const STANCE_WAIT = new Set<ActionKey>(["nao_aumentar", "realizacao", "reduzir", "evitar", "sair"]);
 
 const fmt = (v: number, d = 1) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const usd = (v: number) => `US$${fmt(v, 2)}`;
@@ -116,6 +122,12 @@ export function allocate(input: AllocationInput): AllocationResult {
       mult *= a.daysToEarnings !== null && a.daysToEarnings <= 2 ? 0.5 : 0.8;
       reasons.push("earnings próximos");
     }
+    const st = input.stances?.[a.ticker];
+    if (st && STANCE_WAIT.has(st) && action !== "AGUARDAR") {
+      action = "AGUARDAR"; mult = 0;
+      reasons.push(`valuation: ${ACTION_META[st].label.toLowerCase()} — não é momento de aumentar`);
+    }
+    if ((st === "comprar" || st === "recompra") && mult > 0) mult *= 1.4;
     if (need <= 0) { action = action ?? "AGUARDAR"; reasons.push("acima do peso-alvo"); }
     return { a, need, mult, action, cap, blocked, reasons };
   });
@@ -198,6 +210,8 @@ export function allocate(input: AllocationInput): AllocationResult {
     const share = investable > 0 ? amount / investable : 0;
     let action: Action = w.action ?? (amount <= 0 ? "AGUARDAR" : share >= normalShare * 1.15 && (w.a.opportunity.score ?? 50) >= 55 ? "COMPRAR" : "APORTE NORMAL");
     if (amount > 0 && action === "AGUARDAR") action = "APORTE NORMAL";
+    const st = input.stances?.[w.a.ticker];
+    if (amount > 0 && (st === "comprar" || st === "recompra")) action = "COMPRAR";
     const s = w.a.opportunity.score ?? 50;
     const priority: Priority = action === "AGUARDAR" ? "BAIXA" : action === "COMPRAR" || (s >= 62 && w.a.gap > 0) ? "ALTA" : "MÉDIA";
     const { why, favorable, risks, dataUsed } = explain(w.a, action, amount, w.reasons);

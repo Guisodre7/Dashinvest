@@ -297,6 +297,13 @@ input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: n
 .alloc-top { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 12px; align-items: center; }
 .alloc-amount { font-size: 18px; font-weight: 650; }
 @media (max-width: 640px) { .alloc-top { grid-template-columns: 1fr auto; } }
+.where-line summary { cursor: pointer; list-style: none; }
+.where-line summary::-webkit-details-marker { display: none; }
+.where-line[open] { border-color: var(--text-3, var(--border)); }
+.where-top { display: grid; grid-template-columns: 90px minmax(0, 1fr) 190px; gap: 12px; align-items: center; }
+.where-note { margin-top: 6px; }
+.where-line .why .stance { border: 0; padding: 0; box-shadow: none; }
+@media (max-width: 640px) { .where-top { grid-template-columns: minmax(0, 1fr); gap: 6px; } .where-w .weightbar { display: none; } }
 details > summary { cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 .why { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); display: grid; gap: 10px; }

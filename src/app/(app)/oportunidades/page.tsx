@@ -53,7 +53,7 @@ export default async function OportunidadesPage({ searchParams }: { searchParams
               <div className="grid grid-2">
                 {list.map((s) => <StanceCard key={s.ticker} s={s} price={price(s.ticker)} name={`🇺🇸 ${name(s.ticker) ?? ""}`} compact />)}
                 {brList.map((v) => (
-                  <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={`🇧🇷 ${v.name ?? ""}`} compact href={`/brasil#br-${v.code}`}>
+                  <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={`🇧🇷 ${v.name ?? ""}`} compact href={`/brasil?aba=aporte#br-${v.code}`}>
                     <BrFundamentalsLine v={v} error={brs.errors[v.code]} />
                   </StanceCard>
                 ))}

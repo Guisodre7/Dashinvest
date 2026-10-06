@@ -96,7 +96,7 @@ export default async function AnalisarPage({ searchParams }: { searchParams: Pro
           </section>
 
           <section className="section grid grid-2">
-            <StanceCard s={d.stance} price={d.price} cur={cur} name={d.name ?? undefined} compact href={market === "US" ? `/ativo/${encodeURIComponent(ticker)}#realizacao` : `/brasil?aba=valuation#br-${ticker}`} />
+            <StanceCard s={d.stance} price={d.price} cur={cur} name={d.name ?? undefined} compact href={market === "US" ? `/ativo/${encodeURIComponent(ticker)}#realizacao` : `/brasil?aba=aporte#br-${ticker}`} />
             <div className="card stack">
               <h3>Empresa / fundo</h3>
               <div className="row-wrap xsmall">{d.metrics.map((m) => <span key={m.label} className="chip">{m.label}: <strong>{m.value}</strong></span>)}</div>

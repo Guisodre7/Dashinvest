@@ -1,6 +1,7 @@
 import { allocate } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { loadStances, stanceActions } from "@/lib/data/stances";
 import { brl, dateBr, n, pct, usd } from "@/lib/format";
 
 /** Relatório mensal — leitura de ~5 minutos, gerado a partir dos dados atuais. */
@@ -9,9 +10,9 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   if ((await searchParams).m === "BR") return <BrReport />;
   const ctx = await loadContext(user);
   const { portfolio: p, analyses } = ctx;
-  const [snapshots, transactions, dividends, defaultAmount] = await Promise.all([
+  const [snapshots, transactions, dividends, defaultAmount, st] = await Promise.all([
     ctx.repo.getSnapshots(31), ctx.repo.getTransactions(200), ctx.repo.getDividends(),
-    ctx.repo.getSetting<number>("default_contribution"),
+    ctx.repo.getSetting<number>("default_contribution"), loadStances(ctx, ctx.repo),
   ]);
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const buys = transactions.filter((t) => t.kind === "buy" && t.trade_date >= monthAgo);
@@ -31,7 +32,7 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   const events = [...analyses.flatMap((a) => a.events), ...ctx.macroEvents].filter((e) => e.date <= nextMonth).sort((a, b) => a.date.localeCompare(b.date));
   const values = Object.fromEntries(p.positions.map((x) => [x.ticker, x.valueUsd ?? 0]));
   const amount = defaultAmount ?? 550;
-  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings });
+  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances) });
 
   return (
     <article className="stack" style={{ maxWidth: 820, gap: 0 }}>

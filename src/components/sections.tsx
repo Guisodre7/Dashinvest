@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { AllocationResult } from "@/lib/analysis/allocation";
 import type { AssetAnalysis } from "@/lib/analysis/analyze";
 import type { MacroDriverImpact, RegimeReading } from "@/lib/analysis/macro";
 import type { AlertRow } from "@/lib/db/repo";
@@ -23,73 +22,6 @@ export function WeightBar({ current, target }: { current: number | null; target:
       <span className="cur" style={{ width: `${Math.min(100, ((current ?? 0) / scale) * 100)}%` }} />
       {target > 0 && <span className="tgt" style={{ left: `${(target / scale) * 100}%` }} />}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Onde aportar
-// ---------------------------------------------------------------------------
-
-export function WhereToInvest({ preview, analyses }: { preview: AllocationResult; analyses: AssetAnalysis[] }) {
-  const byTicker = new Map(analyses.map((a) => [a.ticker, a]));
-  if (preview.blocked) {
-    return <div className="banner banner-neg">{preview.blockReasons.join(" ")}</div>;
-  }
-  return (
-    <>
-    <ul className="m-list only-mobile" aria-label="Onde aportar">
-      {preview.lines.map((l) => {
-        const a = byTicker.get(l.ticker)!;
-        const signal = a.signals.find((s) => s.kind !== "STALE_DATA");
-        return (
-          <li key={l.ticker}>
-            <Link href={assetHref(l.ticker)} className="m-row">
-              <div className="m-row-top">
-                <div className="m-id"><span className="ticker">{l.ticker}</span><span className="xsmall faint">{l.bucket}</span></div>
-                <div className="m-right">
-                  <span className={`badge ${l.priority === "ALTA" ? "badge-pos" : ""}`}>{l.priority}</span>
-                  <ScoreBadge score={l.opportunityScore} />
-                </div>
-              </div>
-              <div className="m-row-mid">
-                <WeightBar current={l.currentWeight} target={l.targetWeight} />
-                <span className={`num small ${l.gap < -1 ? "warn" : ""}`}>{pp(l.gap)}</span>
-              </div>
-              <div className="m-row-sub xsmall">
-                <span className="muted num">{n(l.currentWeight, 1)}% → alvo {n(l.targetWeight, 1)}% · {l.action.toLowerCase()} · confiança {l.confidence.toLowerCase()}</span>
-                {a.dataQuality.criticalStale && <span className="neg"> · cotação desatualizada</span>}
-              </div>
-              {signal && <div className={`m-row-sub xsmall ${signal.tone === "positive" ? "pos" : signal.tone === "negative" ? "neg" : "muted"}`}>{signal.title}</div>}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-    <div className="table-wrap only-desktop">
-      <table>
-        <thead>
-          <tr><th>Ativo</th><th>Prioridade</th><th className="num">Score</th><th>Peso atual → alvo</th><th className="num">Desvio</th><th>Sinais</th><th>Confiança</th></tr>
-        </thead>
-        <tbody>
-          {preview.lines.map((l) => {
-            const a = byTicker.get(l.ticker)!;
-            const signals = a.signals.filter((s) => s.kind !== "STALE_DATA");
-            return (
-              <tr key={l.ticker}>
-                <td className="cell-main"><Link href={assetHref(l.ticker)} className="ticker">{l.ticker}</Link><div className="xsmall faint">{l.bucket}</div></td>
-                <td data-label="Prioridade"><span className={`badge ${l.priority === "ALTA" ? "badge-pos" : ""}`}>{l.priority}</span> <span className="xsmall muted">{l.action}</span></td>
-                <td data-label="Score" className="num"><ScoreBadge score={l.opportunityScore} /></td>
-                <td data-label="Peso atual → alvo" className="cell-full m-o1" style={{ minWidth: 140 }}><WeightBar current={l.currentWeight} target={l.targetWeight} /><div className="xsmall muted num">{n(l.currentWeight, 2)}% → {n(l.targetWeight, 2)}%</div></td>
-                <td data-label="Desvio" className={`num ${l.gap > 1 ? "" : l.gap < -1 ? "warn" : ""}`}>{pp(l.gap)}</td>
-                <td data-label="Sinais" className="m-span2 m-o2 small">{signals.length ? signals.slice(0, 2).map((s) => <div key={s.kind} className={s.tone === "positive" ? "pos" : s.tone === "negative" ? "neg" : "muted"}>{s.title}</div>) : <span className="faint">—</span>}</td>
-                <td data-label="Confiança" className="m-o2 small">{l.confidence}{a.dataQuality.criticalStale && <div className="neg xsmall">cotação desatualizada</div>}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-    </>
   );
 }
 

@@ -2,6 +2,7 @@
 import { allocate, type AllocationResult } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { loadStances, stanceActions } from "@/lib/data/stances";
 
 export interface ContributionState {
   result: AllocationResult | null;
@@ -22,6 +23,7 @@ export async function calculateContribution(_prev: ContributionState, formData: 
   const globalBlockReasons: string[] = [];
   const missingPrice = ctx.portfolio.missingPrices;
   if (missingPrice.length) globalBlockReasons.push(`Sem preço para ${missingPrice.join(", ")} — pesos atuais não podem ser calculados com segurança.`);
+  const { stances } = await loadStances(ctx, ctx.repo);
   const result = allocate({
     contribution: Math.round(amount * 100) / 100,
     analyses: ctx.analyses,
@@ -29,6 +31,7 @@ export async function calculateContribution(_prev: ContributionState, formData: 
     existingOpportunityCash: ctx.opportunityCashBalance,
     settings: ctx.settings,
     globalBlockReasons,
+    stances: stanceActions(stances),
   });
   try {
     await ctx.repo.saveRecommendation(result);

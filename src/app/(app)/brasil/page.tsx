@@ -4,6 +4,8 @@ import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
+import AllocationView from "@/components/AllocationView";
+import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
 import ClassRow from "@/components/ClassRow";
 import LedgerForm from "@/components/LedgerForm";
 import MovementTabs from "@/components/MovementTabs";
@@ -12,6 +14,7 @@ import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
 import { loadBrStances } from "@/lib/data/brStances";
 import { allocateBr } from "@/lib/allocation/brAllocate";
+import { brAllocationResult } from "@/lib/allocation/brView";
 import { parseUserNumber } from "@/lib/userNumber";
 import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
 import { getRepo } from "@/lib/db/repo";
@@ -21,21 +24,22 @@ import { CLASS_LABEL, KIND_LABEL, PRICED } from "@/lib/portfolio/ledger";
 import { registerEntry, saveBrStrategy, undoEntry } from "./actions";
 
 // Abas navegadas pelo submenu da carteira (mesmo padrão do Internacional).
-const BR_TABS = [{ key: "resumo" }, { key: "aporte" }, { key: "posicoes" }, { key: "movimentar" }, { key: "valuation" }, { key: "estrategia" }] as const;
+const BR_TABS = [{ key: "resumo" }, { key: "aporte" }, { key: "posicoes" }, { key: "movimentar" }, { key: "estrategia" }] as const;
 type BrTab = (typeof BR_TABS)[number]["key"];
 
 export default async function BrasilPage({ searchParams }: { searchParams: Promise<{ aba?: string; valor?: string }> }) {
   const { aba, valor } = await searchParams;
-  const tab: BrTab = BR_TABS.some((t) => t.key === aba) ? (aba as BrTab) : "resumo";
+  // "valuation" (links antigos) agora é a mesma página do aporte.
+  const tab: BrTab = aba === "valuation" ? "aporte" : BR_TABS.some((t) => t.key === aba) ? (aba as BrTab) : "resumo";
   const user = await requireUser();
   const repo = await getRepo(user.id);
   const br = await loadBrazil(repo);
-  // Fundamentos só quando a aba de valuation é aberta (mais rápido no resto).
-  const brs = tab === "valuation" || tab === "aporte" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
+  // Fundamentos só quando a aba de aporte/valuation é aberta (mais rápido no resto).
+  const brs = tab === "aporte" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
   const aporteValor = parseUserNumber(valor);
-  const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? allocateBr(aporteValor, br.summary, br.strategy, brs.views) : null;
-  const hist = tab === "valuation" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
-  const brBuys = tab === "valuation" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
+  const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? brAllocationResult(allocateBr(aporteValor, br.summary, br.strategy, brs.views), br.summary, br.strategy, brs.views) : null;
+  const hist = tab === "aporte" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
+  const brBuys = tab === "aporte" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
     const v = brs.views.find((x) => x.code === e.code);
     return { ticker: e.code, date: e.trade_date, price: e.price!, quantity: e.quantity, snap: snapshotOn(hist, e.trade_date, e.code), now: { price: v?.price ?? null, band: v?.stance.band ?? null, thesis: v?.stance.thesis ?? "não verificável" as const } };
   }) : [];
@@ -51,6 +55,23 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   };
   const label = (h: { code: string; name: string | null; asset_class: Parameters<typeof PRICED.has>[0] }) => (PRICED.has(h.asset_class) ? h.code : h.name ?? h.code);
   const recent = [...br.entries].reverse().slice(0, 30);
+  // "Onde aportar": todos os ativos do radar, com o valuation dentro da linha.
+  const board: BoardRow[] = tab === "aporte" ? strategy.assets.filter((a) => a.enabled || s.holdings.some((h) => h.code === a.code && h.quantity > 0)).map((a) => {
+    const v = brs.views.find((x) => x.code === a.code);
+    const nIn = strategy.assets.filter((x) => x.enabled && x.asset_class === a.asset_class).length || 1;
+    const h = s.holdings.find((x) => x.code === a.code);
+    const current = s.currentValue > 0 ? h?.weight ?? 0 : null, target = a.enabled ? strategy.classes[a.asset_class] / nIn : 0;
+    return {
+      id: `br-${a.code}`, ticker: a.code, bucket: CLASS_LABEL[a.asset_class], priority: a.enabled ? priorityFromStance(v?.stance.action, current, target) : "BAIXA",
+      stance: v?.stance ?? null, current, target,
+      note: !a.enabled ? "Fora da estratégia: não recebe aporte." : !v ? `Sem dados de valuation${brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""}: espera.` : overTarget(current, target) ? `${v.stance.headline} Espera: já na meta ou acima.` : v.stance.headline,
+      detail: v ? (
+        <StanceCard s={v.stance} price={v.price} cur="R$" name={v.name ?? undefined} compact href={`/analisar?ativo=${encodeURIComponent(a.code)}&mercado=BR`}>
+          <BrFundamentalsLine v={v} error={brs.errors[a.code]} />
+        </StanceCard>
+      ) : <p className="small faint">Fundamentos indisponíveis{brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""} — sem faixa de valuation.</p>,
+    };
+  }) : [];
 
   return (
     <div className="stack" style={{ gap: 0 }}>
@@ -113,23 +134,6 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         </>
       )}
 
-      {tab === "valuation" && (
-        <>
-      <section className="section">
-        <div className="section-head"><h2>Valuation dos ativos</h2><span className="xsmall faint">qualidade · faixa de valuation · peso na carteira — não é ordem</span></div>
-        <div className="grid grid-2">
-          {brs.views.map((v) => (
-            <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={v.name ?? undefined} compact href={`/brasil#br-${v.code}`}>
-              <BrFundamentalsLine v={v} error={brs.errors[v.code]} />
-            </StanceCard>
-          ))}
-        </div>
-        {brBuys.length > 0 && <div style={{ marginTop: 14 }}><EntryReviewList buys={brBuys} cur="R$" /></div>}
-      </section>
-
-        </>
-      )}
-
       {tab === "aporte" && (
         <section className="section stack">
           <form className="card contrib" method="get">
@@ -143,24 +147,20 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
           <p className="xsmall faint">Não sabe quanto vai para o Brasil e quanto para o exterior? <Link href="/geral#plano">Plano do mês na Visão geral</Link>.</p>
           {alloc && (
             <div className="card stack">
-              <div className="kpi-label">Alocação sugerida pelo modelo · {brl(alloc.amount)}</div>
-              <ul className="decision-list">
-                {alloc.lines.map((l) => (
-                  <li key={l.label}>
-                    <span className="ticker">{l.label}</span>
-                    <span className="xsmall muted">{l.reason}</span>
-                    <strong className="num">{brl(l.amount)}</strong>
-                  </li>
-                ))}
-              </ul>
-              <p className="xsmall muted">Por classe: {alloc.classSplit.map((c) => `${c.why} → ${brl(c.amount)}`).join(" · ")}</p>
-              {alloc.notes.map((n) => <p key={n} className="xsmall muted">{n}</p>)}
-              <p className="xsmall faint">Melhor relação risco/retorno estimada no cenário atual — não é garantia de retorno. Nenhuma ordem é enviada.</p>
+              <AllocationView result={alloc} cur="R$" />
               <div className="row-wrap">
                 <Link className="btn btn-sm" href="/brasil?aba=movimentar">Registrar as compras feitas</Link>
                 <Link className="btn btn-ghost btn-sm" href="/analisar?mercado=BR">Analisar um ativo antes</Link>
               </div>
             </div>
+          )}
+          <div className="section-head"><h2>Onde aportar</h2><span className="xsmall faint">todo o radar · toque no ativo para ver o valuation</span></div>
+          <WhereBoard rows={board} />
+          {brBuys.length > 0 && (
+            <details className="card">
+              <summary className="small muted">Minhas compras × valuation de hoje (retrospectiva)</summary>
+              <div style={{ marginTop: 10 }}><EntryReviewList buys={brBuys} cur="R$" /></div>
+            </details>
           )}
         </section>
       )}

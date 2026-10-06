@@ -18,20 +18,18 @@ export function portfolioContext(path: string, params: URLSearchParams): Ctx {
 const SUB: Record<"US" | "BR", { key: string; label: string; href: string }[]> = {
   US: [
     { key: "resumo", label: "Resumo", href: "/" },
-    { key: "aporte", label: "Aporte", href: "/?aba=aporte" },
+    { key: "aporte", label: "Aporte e valuation", href: "/?aba=aporte" },
     { key: "posicoes", label: "Posições", href: "/?aba=carteira" },
     { key: "movimentar", label: "Movimentar", href: "/carteira" },
-    { key: "valuation", label: "Valuation", href: "/oportunidades?m=US" },
     { key: "estrategia", label: "Estratégia", href: "/estrategia" },
     { key: "projecao", label: "Projeção", href: "/projecao?m=US" },
     { key: "relatorio", label: "Relatório", href: "/relatorio?m=US" },
   ],
   BR: [
     { key: "resumo", label: "Resumo", href: "/brasil" },
-    { key: "aporte", label: "Aporte", href: "/brasil?aba=aporte" },
+    { key: "aporte", label: "Aporte e valuation", href: "/brasil?aba=aporte" },
     { key: "posicoes", label: "Posições", href: "/brasil?aba=posicoes" },
     { key: "movimentar", label: "Movimentar", href: "/brasil?aba=movimentar" },
-    { key: "valuation", label: "Valuation", href: "/brasil?aba=valuation" },
     { key: "estrategia", label: "Estratégia", href: "/brasil?aba=estrategia" },
     { key: "projecao", label: "Projeção", href: "/projecao?m=BR" },
     { key: "relatorio", label: "Relatório", href: "/relatorio?m=BR" },
@@ -41,12 +39,12 @@ const SUB: Record<"US" | "BR", { key: string; label: string; href: string }[]> =
 function activeKey(ctx: "US" | "BR", path: string, p: URLSearchParams): string {
   if (path.startsWith("/projecao")) return "projecao";
   if (path.startsWith("/relatorio")) return "relatorio";
-  if (path.startsWith("/oportunidades") || path.startsWith("/ativo")) return "valuation";
+  if (path.startsWith("/oportunidades") || path.startsWith("/ativo")) return "aporte";
   if (path.startsWith("/estrategia")) return "estrategia";
   if (path.startsWith("/carteira")) return "movimentar";
   if (path.startsWith("/analisar")) return "aporte";
   const aba = p.get("aba");
-  if (ctx === "BR") return aba ?? "resumo";
+  if (ctx === "BR") return aba === "valuation" ? "aporte" : aba ?? "resumo";
   return aba === "aporte" ? "aporte" : aba === "carteira" ? "posicoes" : "resumo";
 }
 

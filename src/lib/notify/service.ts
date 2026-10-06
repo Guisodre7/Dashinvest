@@ -117,7 +117,7 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   const theses = await getTheses(repo);
   const candidates: Candidate[] = [
     ...usCandidates(ctx.analyses, now), ...stanceCandidates(stances, { market: "US" }),
-    ...stanceCandidates(brs.views.map((v) => v.stance), { market: "BR", currency: "R$", url: (t) => `/brasil?aba=valuation#br-${t}`, opportunities: true }), ...ladderCandidates(ladders ?? {}, prices, {
+    ...stanceCandidates(brs.views.map((v) => v.stance), { market: "BR", currency: "R$", url: (t) => `/brasil?aba=aporte#br-${t}`, opportunities: true }), ...ladderCandidates(ladders ?? {}, prices, {
       held: (t) => (ctx.portfolio.positions.find((x) => x.ticker === t)?.quantity ?? 0) > 0,
       lastSellDate: (t) => transactions.filter((x) => x.kind === "sell" && x.ticker === t).map((x) => x.trade_date).sort().pop() ?? null,
     }),
