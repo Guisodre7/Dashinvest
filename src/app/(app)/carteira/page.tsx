@@ -1,6 +1,8 @@
 import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
 import BuyTradeForm from "@/components/BuyTradeForm";
+import DividendForm from "@/components/DividendForm";
+import SellTradeForm from "@/components/SellTradeForm";
 import { serverConfig } from "@/lib/config";
 import HistoryChart from "@/components/HistoryChart";
 import { requireUser } from "@/lib/auth";
@@ -111,30 +113,12 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
           <h3>Registrar venda</h3>
           <p className="xsmall faint" style={{ marginBottom: 8 }}>Venda total ou parcial já executada na corretora. Calcula o lucro realizado sobre o preço médio (com taxas). Lucro realizado até hoje: <strong className={`num ${tone(realizedUsd)}`}>{usd(realizedUsd)}</strong>.</p>
           {sellReady ? (
-            <ActionForm action={registerSell} submitLabel="Registrar venda" confirm="Registrar esta venda? Nenhuma ordem é enviada à corretora.">
-              <label>Ticker<select name="ticker" required>{positions.filter((p) => p.quantity > 0).map((p) => <option key={p.ticker} value={p.ticker}>{p.ticker} ({n(p.quantity, 4)})</option>)}</select></label>
-              <label>Quantidade vendida<input name="quantity" inputMode="decimal" required /></label>
-              <label>Preço de venda (US$)<input name="price" inputMode="decimal" required /></label>
-              <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
-              <label>Câmbio (R$/US$)<input name="fx_rate" inputMode="decimal" /></label>
-              <label>Data<input name="trade_date" type="date" /></label>
-              <label>Observação<input name="notes" /></label>
-            </ActionForm>
+            <SellTradeForm action={registerSell} positions={positions.filter((p) => p.quantity > 0).map((p) => ({ ticker: p.ticker, quantity: p.quantity }))} />
           ) : <p className="small muted">Disponível após aplicar a migração 0004 no Supabase.</p>}
         </div>
         <div className="card">
           <h3>Registrar dividendo / distribuição</h3>
-          <ActionForm action={registerDividend} submitLabel="Registrar provento">
-            <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
-            <label>Tipo<select name="kind"><option value="dividend">Dividendo (empresa)</option><option value="distribution">Distribuição (ETF)</option></select></label>
-            <label>Valor bruto (US$)<input name="gross_amount" inputMode="decimal" required /></label>
-            <label>Imposto retido (US$)<input name="withholding_tax" inputMode="decimal" /></label>
-            <label>Por cota (US$)<input name="amount_per_share" inputMode="decimal" /></label>
-            <label>Cotas<input name="quantity" inputMode="decimal" /></label>
-            <label>Data ex<input name="ex_date" type="date" /></label>
-            <label>Pagamento<input name="pay_date" type="date" /></label>
-            <label style={{ flexDirection: "row", alignItems: "center" }}><input type="checkbox" name="reinvested" /> Reinvestido</label>
-          </ActionForm>
+          <DividendForm action={registerDividend} tickers={tickers} />
         </div>
         <div className="card">
           <h3>Proventos e reinvestimento</h3>

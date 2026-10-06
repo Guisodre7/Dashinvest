@@ -154,14 +154,19 @@ export async function registerDividend(_: FormState, fd: FormData): Promise<Form
     const ticker = String(fd.get("ticker") ?? "").trim().toUpperCase();
     if (!TICKER.test(ticker)) throw new Error("Ticker inválido.");
     const kind = fd.get("kind") === "distribution" ? "distribution" : "dividend";
-    await (await getRepo(user.id)).addDividend({
+    const repo = await getRepo(user.id);
+    const gross = num(fd.get("gross_amount"), { required: true, min: 0 })!;
+    const payDate = date(fd.get("pay_date"));
+    const dup = (await repo.getDividends()).find((d) => d.ticker === ticker && d.pay_date === payDate && Math.abs(d.gross_amount - gross) < 0.005);
+    if (dup && payDate) throw new Error(`Provento de ${ticker} de ${payDate.split("-").reverse().join("/")} já registrado. Nada foi alterado.`);
+    await repo.addDividend({
       ticker, kind,
-      gross_amount: num(fd.get("gross_amount"), { required: true, min: 0 })!,
+      gross_amount: gross,
       withholding_tax: num(fd.get("withholding_tax"), { min: 0 }) ?? 0,
       amount_per_share: num(fd.get("amount_per_share"), { min: 0 }),
       quantity: num(fd.get("quantity"), { min: 0 }),
       ex_date: date(fd.get("ex_date")),
-      pay_date: date(fd.get("pay_date")),
+      pay_date: payDate,
       reinvested: fd.get("reinvested") === "on",
     });
     return `${kind === "distribution" ? "Distribuição" : "Dividendo"} de ${ticker} registrado.`;
@@ -195,6 +200,11 @@ export async function registerSell(_: FormState, fd: FormData): Promise<FormStat
     const fx = num(fd.get("fx_rate"), { min: 0 });
     const tradeDate = date(fd.get("trade_date")) ?? new Date().toISOString().slice(0, 10);
     if (qty <= 0 || price <= 0) throw new Error("Quantidade e preço devem ser maiores que zero.");
+    const tradeId = String(fd.get("trade_id") ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24) || null;
+    if (tradeId) {
+      const dup = (await repo.getTransactions(1000)).find((t) => (t.notes ?? "").toUpperCase().includes(`#${tradeId}`));
+      if (dup) throw new Error(`Este comprovante (#${tradeId}) já foi registrado em ${dup.trade_date.split("-").reverse().join("/")}. Nada foi alterado.`);
+    }
     const cur = (await repo.getPositions()).find((p) => p.ticker === ticker);
     if (!cur || cur.quantity <= 0) throw new Error(`Não há posição de ${ticker} para vender.`);
     if (qty > cur.quantity + 1e-9) throw new Error(`Venda de ${qty} maior que a posição (${cur.quantity}).`);
@@ -204,7 +214,8 @@ export async function registerSell(_: FormState, fd: FormData): Promise<FormStat
     const realized = Math.round((qty * price - fees - costOut) * 1e6) / 1e6;
     await repo.addTransaction({
       ticker, kind: "sell", quantity: qty, price, fees, fx_rate: fx, currency: "USD",
-      broker: str(fd.get("broker")) ?? cur.broker, trade_date: tradeDate, notes: str(fd.get("notes")), realized_pnl: realized,
+      broker: str(fd.get("broker")) ?? cur.broker, trade_date: tradeDate, realized_pnl: realized,
+      notes: [str(fd.get("notes")), tradeId ? `Comprovante #${tradeId}` : null].filter(Boolean).join(" · ") || null,
     });
     const left = Math.round((cur.quantity - qty) * 1e8) / 1e8;
     if (left <= 0) await repo.deletePosition(ticker);

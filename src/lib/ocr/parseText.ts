@@ -146,7 +146,9 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
   const trade_date = findDate(clean, portuguese, notes);
   const broker = BROKERS.find((b) => new RegExp(`\\b${b}\\b`, "i").test(clean)) ?? null;
 
-  const idMatch = clean.match(/(?:n[úu]mero da transa[çc][ãa]o|id da ordem|order id|transaction id|n[ºo°] da ordem)\s*[:#-]?\s*\n?\s*([A-Z0-9]{6,20})\b/i);
+  const idMatch = clean.match(/(?:n[úu]mero da transa[çc][ãa]o|id da transa[çc][ãa]o|n[úu]mero da ordem|id da ordem|order id|transaction id|n[ºo°] da ordem)\s*[:#-]?\s*\n?\s*#?\s*([A-Z0-9]{6,20})\b/i)
+    // Reserva: "#NHKH244553" solto no texto (com ao menos um dígito).
+    ?? clean.match(/#\s?((?=[A-Z0-9]*\d)[A-Z0-9]{6,20})\b/i);
   const trade_id = idMatch ? idMatch[1].toUpperCase() : null;
 
   const found = [ticker, quantity, price, total, gross].filter((x) => x !== null).length;

@@ -1,7 +1,7 @@
 import "server-only";
 import { serverConfig } from "../config";
 import { buildMeta } from "./freshness";
-import { getJson, toNum } from "./http";
+import { getJson, HttpError, toNum } from "./http";
 import type { Quote } from "./types";
 
 const BASE = "https://brapi.dev/api/quote";
@@ -15,16 +15,34 @@ export type BrapiBody = { results?: Record<string, unknown>[]; error?: boolean; 
  * nunca rotulada como tempo real; o horário exibido é o do fornecedor.
  * 15 min de cache compartilhado por ativo.
  */
-export async function getBrQuotes(codes: string[]): Promise<Record<string, Quote | null>> {
+export interface BrQuotes {
+  quotes: Record<string, Quote | null>;
+  /** Motivo por ativo quando não há cotação (exibido na tela, nunca escondido). */
+  errors: Record<string, string>;
+}
+
+export async function getBrQuotes(codes: string[]): Promise<BrQuotes> {
   const token = serverConfig.brapiToken;
-  const out = await Promise.all(codes.map(async (code) => {
-    // Chave no header (recomendação da brapi), nunca na URL.
-    const body = await getJson<BrapiBody>(NAME, "quote", `${BASE}/${encodeURIComponent(code)}`, {
-      revalidate: 900, ticker: code, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }).catch(() => null);
-    return [code, body ? parseBrapiQuote(code, body) : null] as const;
-  }));
-  return Object.fromEntries(out);
+  const quotes: Record<string, Quote | null> = {};
+  const errors: Record<string, string> = {};
+  // Lotes de 2: o plano gratuito limita rajadas. Bloqueio do disjuntor é por ativo
+  // (um ticker fora do plano não derruba os outros).
+  for (let i = 0; i < codes.length; i += 2) {
+    await Promise.all(codes.slice(i, i + 2).map(async (code) => {
+      try {
+        // Chave no header (recomendação da brapi), nunca na URL.
+        const body = await getJson<BrapiBody>(NAME, `quote:${code}`, `${BASE}/${encodeURIComponent(code)}`, {
+          revalidate: 900, ticker: code, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        quotes[code] = parseBrapiQuote(code, body);
+        if (!quotes[code]) errors[code] = body.message ? `brapi: ${body.message.slice(0, 80)}` : "resposta sem preço";
+      } catch (err) {
+        quotes[code] = null;
+        errors[code] = err instanceof HttpError ? `HTTP ${err.status}${err.status === 401 || err.status === 403 ? " (token/plano)" : err.status === 429 ? " (limite)" : ""}` : "sem resposta";
+      }
+    }));
+  }
+  return { quotes, errors };
 }
 
 export function parseBrapiQuote(code: string, body: BrapiBody): Quote | null {

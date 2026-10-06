@@ -3,24 +3,11 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import type { BuyState, BuyUndo } from "@/app/(app)/carteira/actions";
 import { normalizeTrade, type NormalizedTrade, type TradeDraft } from "@/lib/ocr/normalize";
 import { parseTradeText } from "@/lib/ocr/parseText";
+import { compressImage, readDocumentText } from "@/lib/ocr/readFile";
 
 type State = BuyState;
 type Fields = { ticker: string; quantity: string; price: string; fx_rate: string; trade_date: string; fees: string; broker: string; notes: string; trade_id: string };
 const EMPTY: Fields = { ticker: "", quantity: "", price: "", fx_rate: "", trade_date: "", fees: "", broker: "", notes: "", trade_id: "" };
-
-/** Reduz fotos grandes (e converte HEIC quando o navegador consegue decodificar) para JPEG ≤ 2000px. */
-async function compressImage(file: File): Promise<Blob> {
-  if (file.type === "application/pdf") return file;
-  if (file.size < 1.2 * 1024 * 1024 && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file;
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return file;
-  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b ?? file), "image/jpeg", 0.85));
-}
 
 const fmt = (v: number | null, digits = 6) => (v === null ? "" : String(Number(v.toFixed(digits))));
 
@@ -128,11 +115,7 @@ export default function BuyTradeForm({
     resetRead(); setReading(true); setLastFile(file);
     setPreview(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
     try {
-      const { ocrImage, readPdf } = await import("@/lib/ocr/localOcr");
-      const onProgress = (label: string, frac: number | null) => setProgress(frac === null ? label : `${label} ${Math.round(frac * 100)}%`);
-      const r = file.type === "application/pdf"
-        ? await readPdf(file, onProgress)
-        : await ocrImage(await compressImage(file), onProgress);
+      const r = await readDocumentText(file, (label, frac) => setProgress(frac === null ? label : `${label} ${Math.round(frac * 100)}%`));
       const n = normalizeTrade(parseTradeText(r.text, tickers), tickers);
       if (!n.ok) {
         setReadError("Não encontrei os dados de uma ordem neste arquivo. Tente um print mais nítido, recortado na confirmação da ordem, ou cole o texto abaixo.");

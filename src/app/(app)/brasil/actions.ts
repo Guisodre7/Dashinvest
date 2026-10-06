@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { invalidateUserContext } from "@/lib/data/load";
 import { getRepo } from "@/lib/db/repo";
 import { B3_TICKER, BrStrategySchema, DEFAULT_BR_STRATEGY, parseBrStrategy } from "@/lib/portfolio/brStrategy";
+import { z } from "zod";
+import { matchHolding, planFundImport, slugify, type FundImportInput, type FundImportPlan } from "@/lib/portfolio/fundImport";
 import { applyEntry, PRICED, type AssetClass, type EntryInput, type Holding, type LedgerKind } from "@/lib/portfolio/ledger";
 
 export interface FormState { ok: boolean; message: string | null }
@@ -21,11 +23,6 @@ function num(v: FormDataEntryValue | null): number | null {
   return n;
 }
 const str = (v: FormDataEntryValue | null, max = 120) => String(v ?? "").trim().slice(0, max) || null;
-
-/** "CDB Banco X 2028" → "cdb-banco-x-2028" (identificador estável de renda fixa). */
-export async function slugify(name: string) {
-  return name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-}
 
 async function done(userId: string, message: string): Promise<FormState> {
   await invalidateUserContext(userId);
@@ -54,7 +51,7 @@ export async function registerEntry(_: FormState, fd: FormData): Promise<FormSta
       if (existing) code = existing;
       else {
         if (!name) throw new Error("Informe o nome do título/fundo.");
-        code = await slugify(name);
+        code = slugify(name);
         if (!code) throw new Error("Nome inválido.");
       }
     }
@@ -133,6 +130,71 @@ export async function saveBrStrategy(_: FormState, fd: FormData): Promise<FormSt
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Configuração inválida.");
     await repo.setSetting("br_strategy", parsed.data);
     return done(user.id, "Estratégia Brasil salva.");
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro ao salvar." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Importação de print de posição (fundo / renda fixa)
+// ---------------------------------------------------------------------------
+
+const money = z.number().finite().min(0).max(1e10);
+const FundInput = z.object({
+  name: z.string().trim().min(3).max(80),
+  cnpj: z.string().regex(/^\d{14}$/).nullable(),
+  invested: money.refine((v) => v > 0, "Valor investido deve ser maior que zero."),
+  grossBalance: money.nullable(),
+  netBalance: money.nullable(),
+  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  lots: z.array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), amount: money })).max(50),
+  use: z.enum(["net", "gross"]),
+  creditPrivate: z.boolean(),
+});
+
+async function plan(raw: unknown): Promise<{ plan: FundImportPlan; input: FundImportInput; current: Holding | null; userId: string }> {
+  const parsed = FundInput.safeParse(raw);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados do print inválidos.");
+  const input = parsed.data;
+  if (input.asOf > new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)) throw new Error("Data da posição no futuro.");
+  const user = await requireUser();
+  const repo = await getRepo(user.id);
+  if (!(await repo.ledgerReady())) throw new Error("Carteira Brasil ainda não ativada (migração 0004).");
+  const current = matchHolding((await repo.getHoldings("BR")).filter((h) => h.asset_class === "renda_fixa"), input);
+  return { plan: planFundImport(current, input), input, current, userId: user.id };
+}
+
+/** Passo 1: mostra o que mudou em relação ao último estado salvo (nada é gravado). */
+export async function previewFundImport(raw: unknown): Promise<{ ok: true; plan: FundImportPlan } | { ok: false; message: string }> {
+  try {
+    return { ok: true, plan: (await plan(raw)).plan };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro ao ler o print." };
+  }
+}
+
+/** Passo 2: confirmado pelo usuário → grava as movimentações (origem: print) e a posição. */
+export async function confirmFundImport(raw: unknown): Promise<FormState> {
+  try {
+    const { plan: p, input, current, userId } = await plan(raw);
+    if (p.blocker) throw new Error(p.blocker);
+    if (p.nothingChanged) return { ok: true, message: "Nada mudou desde o último print — nenhuma alteração gravada." };
+    const repo = await getRepo(userId);
+    let holding = current;
+    const ids: string[] = [];
+    try {
+      for (const e of p.entries) {
+        const r = applyEntry(holding, e);
+        const id = await repo.addLedgerEntry(r.entry);
+        if (id) ids.push(id);
+        holding = r.holding;
+      }
+      await repo.saveHolding({ ...holding!, name: holding!.name ?? input.name, cnpj: input.cnpj ?? holding!.cnpj, notes: input.creditPrivate ? "Crédito privado" : holding!.notes });
+    } catch (err) {
+      for (const id of ids) await repo.deleteLedgerEntry(id).catch(() => undefined);
+      throw err;
+    }
+    return done(userId, `${p.isNew ? "Posição criada" : "Posição atualizada"}: ${p.name}.`);
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "Erro ao salvar." };
   }

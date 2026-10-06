@@ -1,4 +1,5 @@
 import ActionForm from "@/components/ActionForm";
+import FundPrintImport from "@/components/FundPrintImport";
 import LedgerForm from "@/components/LedgerForm";
 import { Kpi, WeightBar } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
@@ -99,7 +100,7 @@ export default async function BrasilPage() {
                       <td data-label="Qtd." className="num">{priced ? n(h.quantity, 4) : "—"}</td>
                       <td data-label="Preço médio" className="num">{priced ? brl(h.avg_price) : "—"}</td>
                       <td data-label="Preço / saldo" className="num">
-                        {priced ? (h.price !== null ? <>{brl(h.price)}<div className="xsmall faint">há {ageOf(h.code)}</div></> : <span className="neg xsmall">sem cotação</span>)
+                        {priced ? (h.price !== null ? <>{brl(h.price)}<div className="xsmall faint">há {ageOf(h.code)}</div></> : <span className="neg xsmall">sem cotação{br.quoteErrors[h.code] ? ` · ${br.quoteErrors[h.code]}` : ""}</span>)
                           : <>{brl(h.current_value)}<div className="xsmall faint">{h.current_value_at ? `em ${dateBr(h.current_value_at.slice(0, 10))}` : "saldo não informado"}</div></>}
                       </td>
                       <td data-label="Valor" className="num">{brl(h.value)}</td>
@@ -115,6 +116,13 @@ export default async function BrasilPage() {
           </div>
         )}
       </section>
+
+      {br.ready && (
+        <section className="section">
+          <div className="section-head"><h2>Adicionar atualização da carteira</h2><span className="xsmall faint">print de fundo / renda fixa → confere → você confirma</span></div>
+          <div className="card"><FundPrintImport /></div>
+        </section>
+      )}
 
       {br.ready && (
         <section className="section">
@@ -159,7 +167,7 @@ export default async function BrasilPage() {
               return (
                 <div key={a.code} className="row-between">
                   <span><strong>{a.code}</strong> <span className="faint xsmall">{a.name ?? ""} · {CLASS_LABEL[a.asset_class]}</span></span>
-                  <span className="num">{q?.price != null ? <>{brl(q.price)} <span className={`xsmall ${tone(q.change_pct)}`}>{pct(q.change_pct, 2, true)}</span></> : <span className="xsmall faint">sem cotação</span>}</span>
+                  <span className="num">{q?.price != null ? <>{brl(q.price)} <span className={`xsmall ${tone(q.change_pct)}`}>{pct(q.change_pct, 2, true)}</span></> : <span className="xsmall faint">sem cotação{br.quoteErrors[a.code] ? ` · ${br.quoteErrors[a.code]}` : ""}</span>}</span>
                 </div>
               );
             })}

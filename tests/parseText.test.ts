@@ -63,3 +63,12 @@ describe("casos encontrados no teste em navegador", () => {
     expect(raw).toMatchObject({ ticker: "MSFT", quantity: 1.5, price: 505.1, fees: 0, trade_date: "2026-09-22", broker: "Nomad", side: "buy" });
   });
 });
+
+describe("id do comprovante (bloqueio de duplicidade)", () => {
+  it("captura 'ID da transação #X' e '#X' solto", async () => {
+    const { parseTradeText } = await import("@/lib/ocr/parseText");
+    expect(parseTradeText("Venda de 0,5 META\nID da transação #SELL123", ["META"]).trade_id).toBe("SELL123");
+    expect(parseTradeText("Compra VOO #NHKH244553", ["VOO"]).trade_id).toBe("NHKH244553");
+    expect(parseTradeText("Compra VOO #ABCDEFG", ["VOO"]).trade_id).toBeNull(); // sem dígito: não é id
+  });
+});

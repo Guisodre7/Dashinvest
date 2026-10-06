@@ -12,6 +12,7 @@ export interface BrazilContext {
   strategy: BrStrategy;
   entries: LedgerEntry[];
   quotes: Record<string, Quote | null>;
+  quoteErrors: Record<string, string>;
   summary: PortfolioLedgerSummary;
   /** Sem token da brapi só PETR4, VALE3, ITUB4 e MGLU3 têm cotação. */
   hasBrapiToken: boolean;
@@ -26,7 +27,7 @@ export async function loadBrazil(repo: Repo): Promise<BrazilContext> {
     ...holdings.filter((h) => PRICED.has(h.asset_class) && h.quantity > 0).map((h) => h.code),
     ...strategy.assets.filter((a) => a.enabled).map((a) => a.code),
   ])];
-  const quotes = await getBrQuotes(codes);
+  const { quotes, errors: quoteErrors } = await getBrQuotes(codes);
   const prices = Object.fromEntries(Object.entries(quotes).map(([k, q]) => [k, q?.price ?? null]));
-  return { ready, strategy, entries, quotes, summary: summarizeLedger(holdings, entries, prices, strategy.classes), hasBrapiToken: !!serverConfig.brapiToken };
+  return { ready, strategy, entries, quotes, quoteErrors, summary: summarizeLedger(holdings, entries, prices, strategy.classes), hasBrapiToken: !!serverConfig.brapiToken };
 }
