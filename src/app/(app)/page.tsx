@@ -107,7 +107,7 @@ export default async function Dashboard() {
         <RadarTable analyses={analyses} />
       </section>
 
-      <section className="section">
+      <section className="section" id="macro">
         <div className="section-head"><h2>🌎 Macro</h2></div>
         <MacroPanel macro={ctx.macro} regime={ctx.regime} impacts={ctx.impacts} events={ctx.macroEvents} />
       </section>

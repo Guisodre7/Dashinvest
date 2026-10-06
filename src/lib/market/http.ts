@@ -27,7 +27,7 @@ function checkBlocked(provider: string, endpoint: string) {
   }
 }
 
-type GetOpts = { revalidate: number; ticker?: string; timeoutMs?: number };
+type GetOpts = { revalidate: number; ticker?: string; timeoutMs?: number; headers?: Record<string, string> };
 
 /**
  * GET JSON server-side com cache do Next (revalidate em segundos; 0 = sem cache).
@@ -51,6 +51,7 @@ async function request<T>(provider: string, endpoint: string, url: string, opts:
   try {
     const res = await fetch(url, {
       signal: controller.signal,
+      headers: opts.headers,
       ...(opts.revalidate > 0
         ? { next: { revalidate: opts.revalidate } }
         : { cache: "no-store" as const }),

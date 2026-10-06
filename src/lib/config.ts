@@ -24,6 +24,11 @@ export const serverConfig = {
   /** Cotações B3 (opcional no plano gratuito; sem ele só PETR4, VALE3, ITUB4, MGLU3). */
   brapiToken: process.env.BRAPI_TOKEN ?? "",
 
+  /** Web Push (VAPID). A chave privada nunca vai para o navegador. */
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+  vapidSubject: process.env.VAPID_SUBJECT ?? "",
+
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   llmModel: process.env.LLM_MODEL ?? "claude-opus-5",
 } as const;

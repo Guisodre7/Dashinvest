@@ -2,6 +2,7 @@ import Link from "next/link";
 import MarketClock from "@/components/MarketClock";
 import MarketSwitch from "@/components/MarketSwitch";
 import NavLinks, { MobileTabBar } from "@/components/NavLinks";
+import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
 import { requireUser } from "@/lib/auth";
 import { isLocalDevMode } from "@/lib/devmode";
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <NavLinks />
           <MarketClock />
+          <NotificationBell />
           <ThemeToggle />
           <form action="/auth/signout" method="post"><button className="btn btn-ghost btn-sm" aria-label="Sair da conta">Sair</button></form>
         </div>

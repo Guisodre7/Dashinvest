@@ -9,6 +9,7 @@ import { isLocalDevMode } from "../devmode";
 import type { EarningsEstimates, AnalystData } from "../market/types";
 import type { DividendRow, PositionRow } from "../portfolio/calc";
 import type { Holding, LedgerEntry, Market } from "../portfolio/ledger";
+import type { Delivery, NotifyCategory, NotifyPriority, SentRecord } from "../notify/rules";
 import { ASSET_META, DEFAULT_STRATEGY } from "../portfolio/defaults";
 import { SCENARIO_KEYS, type ScenarioKey, type ScenarioResult } from "../projection/types";
 import type { ProjectionForm, ScenarioForm } from "../projection/settings";
@@ -52,6 +53,31 @@ export interface AlertRow {
   created_at?: string;
   read_at?: string | null;
 }
+
+export interface PushSubscriptionRow { endpoint: string; p256dh: string; auth: string; device: string | null }
+
+export interface NotificationRow {
+  id?: string;
+  created_at?: string;
+  category: NotifyCategory;
+  priority: NotifyPriority;
+  market: "BR" | "US" | null;
+  ticker: string | null;
+  title: string;
+  body: string;
+  reason: string | null;
+  url: string;
+  dedupe_key: string;
+  group_key: string | null;
+  delivery: Delivery;
+  sent_at: string | null;
+  opened_at?: string | null;
+  read_at?: string | null;
+  archived?: boolean;
+  important?: boolean;
+}
+
+export type NotificationPatch = Partial<Pick<NotificationRow, "read_at" | "opened_at" | "archived" | "important" | "delivery" | "sent_at">>;
 
 export interface StoredRecommendation extends AllocationResult { id?: string }
 
@@ -124,7 +150,22 @@ export interface Repo {
   deleteLedgerEntry(id: string): Promise<void>;
   /** Soma do lucro realizado nas vendas da carteira internacional (US$). */
   getRealizedUsd(): Promise<number>;
+  /** A migração 0005 (notificações) já foi aplicada? */
+  notifyReady(): Promise<boolean>;
+  savePushSubscription(s: PushSubscriptionRow): Promise<void>;
+  removePushSubscription(endpoint: string): Promise<void>;
+  listPushSubscriptions(): Promise<PushSubscriptionRow[]>;
+  markPushSubscription(endpoint: string, status: "active" | "revoked"): Promise<void>;
+  addNotifications(rows: NotificationRow[]): Promise<string[]>;
+  listNotifications(opts: { limit?: number; archived?: boolean; since?: string }): Promise<NotificationRow[]>;
+  updateNotification(id: string, patch: NotificationPatch): Promise<void>;
+  markAllNotificationsRead(): Promise<void>;
+  /** Histórico usado pelo cooldown. */
+  notificationHistory(days: number): Promise<SentRecord[]>;
+  countUnreadNotifications(): Promise<number>;
 }
+
+let notifyReadyCache: { ok: boolean; at: number } | null = null;
 
 // Migração 0004: confirmada uma vez por instância; "ausente" é re-testado a cada minuto.
 let ledgerReadyCache: { ok: boolean; at: number } | null = null;
@@ -482,6 +523,65 @@ class SupabaseRepo implements Repo {
     const rows = this.check(await this.db.from("transactions").select("realized_pnl").eq("user_id", this.userId).eq("kind", "sell"));
     return ((rows ?? []) as { realized_pnl: unknown }[]).reduce((a, r) => a + (num(r.realized_pnl) ?? 0), 0);
   }
+
+  async notifyReady() {
+    if (notifyReadyCache && (notifyReadyCache.ok || Date.now() - notifyReadyCache.at < 60_000)) return notifyReadyCache.ok;
+    const res = await this.db.from("notifications").select("id").limit(1);
+    notifyReadyCache = { ok: !res.error, at: Date.now() };
+    return notifyReadyCache.ok;
+  }
+
+  async savePushSubscription(s: PushSubscriptionRow) {
+    this.check(await this.db.from("push_subscriptions").upsert(
+      { ...s, user_id: this.userId, status: "active", last_used_at: new Date().toISOString() } as never, { onConflict: "endpoint" },
+    ));
+  }
+
+  async removePushSubscription(endpoint: string) {
+    this.check(await this.db.from("push_subscriptions").delete().eq("user_id", this.userId).eq("endpoint", endpoint));
+  }
+
+  async listPushSubscriptions() {
+    const rows = this.check(await this.db.from("push_subscriptions").select("endpoint,p256dh,auth,device").eq("user_id", this.userId).eq("status", "active"));
+    return (rows ?? []) as PushSubscriptionRow[];
+  }
+
+  async markPushSubscription(endpoint: string, status: "active" | "revoked") {
+    await this.db.from("push_subscriptions").update({ status, last_used_at: new Date().toISOString() } as never).eq("user_id", this.userId).eq("endpoint", endpoint);
+  }
+
+  async addNotifications(rows: NotificationRow[]) {
+    if (!rows.length) return [];
+    const res = this.check(await this.db.from("notifications").insert(rows.map((r) => ({ ...r, user_id: this.userId })) as never).select("id")) as { id: string }[] | null;
+    return (res ?? []).map((r) => r.id);
+  }
+
+  async listNotifications(opts: { limit?: number; archived?: boolean; since?: string }) {
+    let q = this.db.from("notifications").select("*").eq("user_id", this.userId).eq("archived", opts.archived ?? false);
+    if (opts.since) q = q.gte("created_at", opts.since);
+    const rows = this.check(await q.order("created_at", { ascending: false }).limit(opts.limit ?? 100));
+    return (rows ?? []) as NotificationRow[];
+  }
+
+  async updateNotification(id: string, patch: NotificationPatch) {
+    this.check(await this.db.from("notifications").update(patch as never).eq("user_id", this.userId).eq("id", id));
+  }
+
+  async markAllNotificationsRead() {
+    this.check(await this.db.from("notifications").update({ read_at: new Date().toISOString() } as never).eq("user_id", this.userId).is("read_at", null));
+  }
+
+  async notificationHistory(days: number) {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const rows = this.check(await this.db.from("notifications").select("dedupe_key,category,priority,ticker,delivery,created_at")
+      .eq("user_id", this.userId).gte("created_at", since).neq("delivery", "test").limit(2000));
+    return (rows ?? []) as SentRecord[];
+  }
+
+  async countUnreadNotifications() {
+    const res = await this.db.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", this.userId).is("read_at", null).eq("archived", false);
+    return res.error ? 0 : res.count ?? 0;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -502,6 +602,8 @@ interface LocalData {
   projectionRuns?: ProjectionRunSummary[];
   holdings?: Holding[];
   ledger?: LedgerEntry[];
+  pushSubscriptions?: PushSubscriptionRow[];
+  notifications?: NotificationRow[];
 }
 
 const LOCAL_FILE = path.join(process.cwd(), ".dev-data.json");
@@ -616,6 +718,37 @@ class LocalRepo implements Repo {
   async getRealizedUsd() {
     return (await this.load()).transactions.filter((t) => t.kind === "sell").reduce((a, t) => a + (t.realized_pnl ?? 0), 0);
   }
+  async notifyReady() { return true; }
+  async savePushSubscription(s: PushSubscriptionRow) {
+    await this.mutate((d) => { d.pushSubscriptions = [...(d.pushSubscriptions ?? []).filter((x) => x.endpoint !== s.endpoint), s]; });
+  }
+  async removePushSubscription(endpoint: string) { await this.mutate((d) => { d.pushSubscriptions = (d.pushSubscriptions ?? []).filter((x) => x.endpoint !== endpoint); }); }
+  async listPushSubscriptions() { return (await this.load()).pushSubscriptions ?? []; }
+  async markPushSubscription(endpoint: string, status: "active" | "revoked") { if (status === "revoked") await this.removePushSubscription(endpoint); }
+  async addNotifications(rows: NotificationRow[]) {
+    const now = new Date().toISOString();
+    const withIds = rows.map((r, i) => ({ archived: false, important: false, read_at: null, opened_at: null, ...r, id: `local-n-${Date.now()}-${i}`, created_at: now }));
+    await this.mutate((d) => { d.notifications = [...withIds, ...(d.notifications ?? [])].slice(0, 500); });
+    return withIds.map((r) => r.id);
+  }
+  async listNotifications(opts: { limit?: number; archived?: boolean; since?: string }) {
+    return ((await this.load()).notifications ?? [])
+      .filter((n) => !!n.archived === (opts.archived ?? false) && (!opts.since || (n.created_at ?? "") >= opts.since))
+      .slice(0, opts.limit ?? 100);
+  }
+  async updateNotification(id: string, patch: NotificationPatch) {
+    await this.mutate((d) => { d.notifications = (d.notifications ?? []).map((n) => (n.id === id ? { ...n, ...patch } : n)); });
+  }
+  async markAllNotificationsRead() {
+    const now = new Date().toISOString();
+    await this.mutate((d) => { d.notifications = (d.notifications ?? []).map((n) => (n.read_at ? n : { ...n, read_at: now })); });
+  }
+  async notificationHistory(days: number) {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    return ((await this.load()).notifications ?? []).filter((n) => (n.created_at ?? "") >= since && n.delivery !== "test")
+      .map((n) => ({ dedupe_key: n.dedupe_key, category: n.category, priority: n.priority, ticker: n.ticker, delivery: n.delivery, created_at: n.created_at! }));
+  }
+  async countUnreadNotifications() { return ((await this.load()).notifications ?? []).filter((n) => !n.read_at && !n.archived).length; }
 }
 
 export async function getRepo(userId: string): Promise<Repo> {

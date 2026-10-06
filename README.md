@@ -59,6 +59,23 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - Os arquivos do motor (~16 MB, baixados uma vez e guardados em cache) são copiados para `public/ocr` por `scripts/copy-ocr-assets.mjs` antes do `dev`/`build`, e servidos pelo próprio site.
 - Opcional: com `ANTHROPIC_API_KEY` configurada, aparece o botão "Tentar leitura com IA" quando a leitura local fica incompleta (`/api/ocr/trade`). Sem a chave, tudo funciona normalmente.
 
+## Notificações no iPhone (Web Push, gratuito)
+
+"Monitorar muito, notificar pouco, explicar bem." Preço subindo ou caindo sozinho nunca gera push.
+
+- **Fluxo**: sino no cabeçalho → permissão (só no toque) → `PushSubscription` → `/api/push/subscribe` → monitor (`/api/cron/monitor`) → regras → Web Push (VAPID) → `public/sw.js` mostra a notificação e abre a análise (deep link) → central `/notificacoes`.
+- **Motor** (`src/lib/notify/rules.ts`, funções puras e testadas):
+  - categorias com cooldown por estado (7 dias para valuation/oportunidade/carteira, 3 para tese/macro; notícias e resultados nunca repetem);
+  - prioridade que sobe ignora o cooldown;
+  - horário de silêncio 22h–07h (Brasília); críticos opcionais; o que fica guardado toca na primeira rodada depois;
+  - teto de 6 pushes não críticos por dia;
+  - mais de 2 alertas na mesma rodada viram um push só;
+  - "ocultar valores na tela bloqueada" ligado por padrão.
+- **Candidatos** (`src/lib/notify/candidates.ts`): sinais do motor de análise (oportunidade, anti-FOMO sem revisão de estimativas, tese, earnings em até 2 dias, peso máximo), revisão de EPS ≥ 6%, notícias de impacto alto/crítico das últimas 48h (texto separa FATO e INTERPRETAÇÃO), classe da carteira Brasil a ≥ 10 p.p. da meta, juros EUA ±0,5 p.p. e dólar ±5% no mês. Realização parcial e recompra entram com a camada de valuation.
+- **Agendamento gratuito**: a Vercel Hobby só roda cron 1x/dia (21:45 UTC). O monitor de hora em hora roda pelo Supabase (`supabase/monitor_cron.sql`, `pg_cron` + `pg_net`), em dias úteis das 9h às 19h de Brasília.
+- **iPhone**: requer iOS 16.4+ e o DashInvest aberto pelo ícone da Tela de Início. O contador do ícone (badge) é atualizado a cada push e ao abrir o app.
+- Banco: `supabase/migrations/0005_notifications.sql` (`push_subscriptions`, `notifications`, RLS). Preferências e estado do monitor em `app_settings`.
+
 ## Navegação
 
 - `loading.tsx` mostra um esqueleto imediatamente ao trocar de aba.

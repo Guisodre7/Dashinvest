@@ -18,8 +18,10 @@ export type BrapiBody = { results?: Record<string, unknown>[]; error?: boolean; 
 export async function getBrQuotes(codes: string[]): Promise<Record<string, Quote | null>> {
   const token = serverConfig.brapiToken;
   const out = await Promise.all(codes.map(async (code) => {
-    const url = `${BASE}/${encodeURIComponent(code)}${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-    const body = await getJson<BrapiBody>(NAME, "quote", url, { revalidate: 900, ticker: code }).catch(() => null);
+    // Chave no header (recomendação da brapi), nunca na URL.
+    const body = await getJson<BrapiBody>(NAME, "quote", `${BASE}/${encodeURIComponent(code)}`, {
+      revalidate: 900, ticker: code, headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }).catch(() => null);
     return [code, body ? parseBrapiQuote(code, body) : null] as const;
   }));
   return Object.fromEntries(out);
