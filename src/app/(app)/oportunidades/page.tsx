@@ -36,7 +36,7 @@ export default async function OportunidadesPage({ searchParams }: { searchParams
     <div className="stack" style={{ gap: 0 }}>
       <section className="hero">
         <div>
-          <h1>{m === "US" ? "🇺🇸 Valuation e oportunidades" : m === "BR" ? "🇧🇷 Valuation e oportunidades" : "Oportunidades agora — Brasil + Exterior"}</h1>
+          <h1>{m === "US" ? "Internacional — valuation e oportunidades" : m === "BR" ? "Brasil — valuation e oportunidades" : "Oportunidades agora — Brasil + Exterior"}</h1>
           <p className="muted small">Qualidade do ativo + faixa de valuation + tese + peso na carteira. Variação de preço não é valuation; nada aqui é ordem. Horizonte: semanas a anos, não day trade.</p>
           <p className="small"><Link href="/analisar">Analisar compra</Link> · <Link href="/teses">Minhas teses</Link> · <Link href="/mudancas">O que mudou?</Link> · <Link href="/estrategia">Pesos-alvo (Estratégia)</Link> · <Link href="/notificacoes">Notificações</Link></p>
         </div>
@@ -51,9 +51,9 @@ export default async function OportunidadesPage({ searchParams }: { searchParams
             <div className="section-head"><h2>{g.title}</h2><span className="xsmall faint">{list.length + brList.length} ativo(s)</span></div>
             {list.length + brList.length === 0 ? <p className="small faint">{g.empty}</p> : (
               <div className="grid grid-2">
-                {list.map((s) => <StanceCard key={s.ticker} s={s} price={price(s.ticker)} name={`🇺🇸 ${name(s.ticker) ?? ""}`} compact />)}
+                {list.map((s) => <StanceCard key={s.ticker} s={s} price={price(s.ticker)} name={`EUA · ${name(s.ticker) ?? ""}`} compact />)}
                 {brList.map((v) => (
-                  <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={`🇧🇷 ${v.name ?? ""}`} compact href={`/brasil?aba=aporte#br-${v.code}`}>
+                  <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={`B3 · ${v.name ?? ""}`} compact href={`/brasil?aba=aporte#br-${v.code}`}>
                     <BrFundamentalsLine v={v} error={brs.errors[v.code]} />
                   </StanceCard>
                 ))}

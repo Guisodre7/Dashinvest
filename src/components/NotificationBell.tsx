@@ -202,8 +202,8 @@ export default function NotificationBell() {
                   </fieldset>
                   <fieldset>
                     <legend className="kpi-label">Carteiras</legend>
-                    <label className="check"><input type="checkbox" checked={st.prefs.markets.BR} onChange={(e) => update({ markets: { ...st.prefs.markets, BR: e.target.checked } })} /> 🇧🇷 Brasil</label>
-                    <label className="check"><input type="checkbox" checked={st.prefs.markets.US} onChange={(e) => update({ markets: { ...st.prefs.markets, US: e.target.checked } })} /> 🇺🇸 Internacional</label>
+                    <label className="check"><input type="checkbox" checked={st.prefs.markets.BR} onChange={(e) => update({ markets: { ...st.prefs.markets, BR: e.target.checked } })} /> Brasil</label>
+                    <label className="check"><input type="checkbox" checked={st.prefs.markets.US} onChange={(e) => update({ markets: { ...st.prefs.markets, US: e.target.checked } })} /> Internacional</label>
                   </fieldset>
                   <fieldset>
                     <legend className="kpi-label">Horário de silêncio</legend>

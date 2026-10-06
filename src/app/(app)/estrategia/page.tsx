@@ -1,4 +1,5 @@
 import ActionForm from "@/components/ActionForm";
+import { FlagUS } from "@/components/Icons";
 import { FACTOR_KEYS, FACTOR_LABELS } from "@/lib/analysis/settings";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
@@ -30,7 +31,7 @@ export default async function EstrategiaPage() {
 
   return (
     <div className="stack" style={{ gap: 0 }}>
-      <section className="hero"><div><div className="hero-title">🇺🇸 Carteira Internacional</div><h1>Estratégia</h1></div></section>
+      <section className="hero"><div><div className="hero-title"><FlagUS size={12} /> Carteira Internacional</div><h1>Estratégia</h1></div></section>
 
       <section className="section grid grid-2">
         <div>

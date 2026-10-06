@@ -28,7 +28,7 @@ export function SellCard({ items, cur }: { items: SummaryAsset[]; cur: "US$" | "
               <li key={s.ticker} className="sell-item">
                 <div className="row-between">
                   <Link href={href} className="ticker">{s.ticker}</Link>
-                  <span className={`badge action-${ACTION_META[s.action].group}`}>{ACTION_META[s.action].emoji} {ACTION_META[s.action].label}</span>
+                  <span className={`badge action-${ACTION_META[s.action].group}`}><i className="dot" />{ACTION_META[s.action].label}</span>
                 </div>
                 <p className="small" style={{ margin: "4px 0" }}>
                   Vender <strong>{qty(r.sharesLow)}–{qty(r.sharesHigh)} cotas</strong>, que representam <strong>{r.pctLow}–{r.pctHigh}% da posição</strong> (≈ {money(cur, r.valueLow)}–{money(cur, r.valueHigh)}),

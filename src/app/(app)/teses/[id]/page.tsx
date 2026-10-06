@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagBR, FlagUS } from "@/components/Icons";
 import { notFound } from "next/navigation";
 import ActionForm from "@/components/ActionForm";
 import { requireUser } from "@/lib/auth";
@@ -25,7 +26,7 @@ export default async function ThesisPage({ params }: { params: Promise<{ id: str
     <div className="stack" style={{ gap: 0 }}>
       <section className="hero">
         <div>
-          <div className="hero-title"><Link href="/teses">Minhas teses</Link> / {t.market === "BR" ? "🇧🇷" : "🇺🇸"}</div>
+          <div className="hero-title"><Link href="/teses">Minhas teses</Link> / {t.market === "BR" ? <FlagBR size={11} /> : <FlagUS size={11} />}</div>
           <h1>{t.ticker}</h1>
           <p className="small muted">Escrita em {new Date(t.created_at).toLocaleDateString("pt-BR")}{t.horizon ? ` · horizonte ${t.horizon}` : ""}{t.status === "encerrada" ? " · encerrada" : ""}</p>
         </div>

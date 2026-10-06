@@ -64,7 +64,7 @@ export type FairBasis = "fair-value" | "historical-multiple" | "graham-bazin" | 
 const BASIS_LABEL: Record<FairBasis, string> = {
   "fair-value": "faixa multi-fonte",
   "historical-multiple": "múltiplo histórico, confiança menor",
-  "graham-bazin": "média de Graham e Bazin",
+  "graham-bazin": "lucro, dividendos e juros",
   patrimonial: "valor patrimonial por cota (P/VP = 1)",
 };
 
@@ -90,7 +90,16 @@ export interface StanceInput {
   lastSell: { date: string; price: number; quantity: number } | null;
   tax: TaxRules;
   currency: "US$" | "R$";
+  /** Sinal dos analistas (-1..+1): revisões de lucro e mudança de recomendação. */
+  analystScore?: number | null;
+  /** Analistas muito divergentes ou base fraca: exige mais desconto para comprar. */
+  uncertain?: boolean;
+  /** DCF reverso: crescimento embutido no preço − crescimento base da empresa (fração). */
+  impliedGap?: number | null;
 }
+
+/** Com incerteza alta, a faixa de compra exige mais desconto. */
+const UNCERTAIN_LIMITS: [number, number, number, number] = [0.8, 0.92, 1.05, 1.25];
 
 export interface Band { key: BandKey; low: number | null; high: number | null }
 
@@ -130,17 +139,17 @@ export function thesisState(signalKinds: string[], est: StanceInput["estimates"]
   return "intacta";
 }
 
-export function valuationBands(mean: number): Band[] {
-  const [a, b, c, d] = BAND_LIMITS.map((x) => x * mean);
+export function valuationBands(mean: number, limits = BAND_LIMITS): Band[] {
+  const [a, b, c, d] = limits.map((x) => x * mean);
   return [
     { key: "forte", low: null, high: a }, { key: "atrativo", low: a, high: b }, { key: "justo", low: b, high: c },
     { key: "esticado", low: c, high: d }, { key: "extremo", low: d, high: null },
   ];
 }
 
-export function bandOf(price: number, mean: number): BandKey {
+export function bandOf(price: number, mean: number, L = BAND_LIMITS): BandKey {
   const r = price / mean;
-  return r < BAND_LIMITS[0] ? "forte" : r < BAND_LIMITS[1] ? "atrativo" : r <= BAND_LIMITS[2] ? "justo" : r <= BAND_LIMITS[3] ? "esticado" : "extremo";
+  return r < L[0] ? "forte" : r < L[1] ? "atrativo" : r <= L[2] ? "justo" : r <= L[3] ? "esticado" : "extremo";
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -159,8 +168,9 @@ export function computeStance(i: StanceInput): Stance {
     return { ...base, action: "aguardar", headline: "Dados insuficientes para uma faixa de valuation confiável.", reasons: [i.isEtf ? "ETF: sem valor justo multi-fonte; acompanhe yield, composição e custos." : "Sem valor justo estimado com pelo menos 2 métodos (ou múltiplo histórico)."] };
   }
 
-  const bands = valuationBands(i.fair.mean);
-  const band = bandOf(i.price, i.fair.mean);
+  const limits = i.uncertain ? UNCERTAIN_LIMITS : BAND_LIMITS;
+  const bands = valuationBands(i.fair.mean, limits);
+  const band = bandOf(i.price, i.fair.mean, limits);
   const premiumPct = (i.price / i.fair.mean - 1) * 100;
   reasons.push(`Preço ${fmt(Math.abs(premiumPct), 1)}% ${premiumPct >= 0 ? "acima" : "abaixo"} do valor justo médio estimado (${BASIS_LABEL[i.fair.basis]}).`);
 
@@ -208,6 +218,13 @@ export function computeStance(i: StanceInput): Stance {
     else if (i.lastSell && i.price < i.lastSell.price && good) { action = "recompra"; headline = "Os fundamentos permanecem preservados e o valuation voltou para uma faixa atrativa: recompra parcial possível."; }
     else if (good || quality === "sem dados") { action = "comprar"; headline = band === "forte" ? "Qualidade + valuation com margem de segurança: faixa de compra forte." : "Qualidade com valuation atrativo: faixa interessante para aporte."; }
     else { action = "manter"; headline = "Valuation atrativo e qualidade mediana: compra normal, sem exagero."; }
+  }
+
+  // Confirmações antes de chamar de oportunidade: analistas e expectativa embutida no preço.
+  if (action === "comprar" && (i.analystScore ?? 0) <= -0.4) {
+    action = "nao_aumentar"; headline = "Preço atrativo, mas os analistas estão cortando lucro/recomendação: esperar estabilizar antes de aumentar.";
+  } else if (action === "comprar" && (i.impliedGap ?? 0) > 0.08) {
+    action = "manter"; headline = "Abaixo do valor justo pelos múltiplos, mas o preço ainda embute crescimento acima do histórico: aporte normal, sem pressa.";
   }
 
   let realization: Stance["realization"] = null;

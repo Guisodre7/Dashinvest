@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagUS } from "@/components/Icons";
 import ContributionForm from "@/components/ContributionForm";
 import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
@@ -50,7 +51,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     contribution: defaultAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
     existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
-    stances: st ? stanceActions(st.stances) : undefined,
+    stances: st ? stanceActions(st.stances) : undefined, mood: ctx.mood,
   }) : null;
   // "Onde aportar": todo o radar (estratégia + legado), com o valuation de cada ativo dentro da linha.
   const board: BoardRow[] = tab === "aporte" ? analyses.filter((a) => a.strategy.enabled || a.strategy.is_legacy).map((a) => {
@@ -65,13 +66,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       detail: (
         <>
           {stance ? <StanceCard s={stance} price={a.price} name={a.name} compact href={`/ativo/${encodeURIComponent(a.ticker)}#realizacao`} /> : <p className="small faint">Sem faixa de valuation (dados insuficientes).</p>}
-          {a.fairValue.estimates.length > 0 && (
-            <div className="xsmall muted">
-              Valor justo {a.fairValue.available ? `(mediana dos métodos: US$ ${a.fairValue.mean!.toFixed(2)})` : "não usado"}: {a.fairValue.estimates.map((e) => `${e.method} = US$ ${e.value.toFixed(2)}`).join(" · ")}
-              {a.fairValue.reason && <div className="warn">{a.fairValue.reason}</div>}
-              <div className="faint">Fontes: {[...new Set(a.fairValue.estimates.map((e) => e.source))].join(", ")}</div>
-            </div>
-          )}
           {a.signals.filter((x) => x.kind !== "STALE_DATA").length > 0 && (
             <ul className="clean xsmall">{a.signals.filter((x) => x.kind !== "STALE_DATA").slice(0, 3).map((x) => <li key={x.kind} className={x.tone === "positive" ? "pos" : x.tone === "negative" ? "neg" : "muted"}>{x.title}</li>)}</ul>
           )}
@@ -91,7 +85,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <section className="dash-head">
         <div className="dash-hero">
-          <div className="hero-title">🇺🇸 Carteira Internacional</div>
+          <div className="hero-title"><FlagUS size={12} /> Carteira Internacional</div>
           <LiveHeroValue fxRate={ctx.fx?.rate ?? null} />
         </div>
         <div className="dash-fresh">

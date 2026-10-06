@@ -140,6 +140,14 @@ describe("motor de alocação", () => {
     expect(lb.priority).toBe("MÉDIA");
   });
 
+  it("ritmo pelo humor do mercado: medo aporta tudo; euforia guarda mais caixa", () => {
+    const bad = analyzeAsset(input("A", flatThenDrop, { estimates: est(-5, -10), currentWeight: 40, targetWeight: 50 }), settings);
+    const ok = analyzeAsset(input("B", flat, { currentWeight: 60, targetWeight: 50 }), settings);
+    const run = (mood: "medo" | "normal" | "euforia") => allocate({ contribution: 600, analyses: [bad, ok], values: { A: 400, B: 600 }, existingOpportunityCash: 0, settings, mood: { mood, reasons: ["teste"] } });
+    expect(run("medo").opportunityCash).toBe(0);
+    expect(run("euforia").opportunityCash).toBeGreaterThan(run("normal").opportunityCash);
+  });
+
   it("não acumula caixa além do limite", () => {
     const bad = analyzeAsset(input("A", flatThenDrop, { estimates: est(-5, -10), currentWeight: 40, targetWeight: 50 }), settings);
     const ok = analyzeAsset(input("B", flat, { currentWeight: 60, targetWeight: 50 }), settings);

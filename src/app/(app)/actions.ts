@@ -32,6 +32,7 @@ export async function calculateContribution(_prev: ContributionState, formData: 
     settings: ctx.settings,
     globalBlockReasons,
     stances: stanceActions(stances),
+    mood: ctx.mood,
   });
   try {
     await ctx.repo.saveRecommendation(result);

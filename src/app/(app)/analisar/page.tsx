@@ -41,7 +41,7 @@ export default async function AnalisarPage({ searchParams }: { searchParams: Pro
       <section className="hero"><div><h1>Analisar compra</h1><p className="muted small">Sua carteira + o ativo + o preço + o contexto, antes de decidir. Não prevê o mercado e não envia ordens.</p></div></section>
 
       <form className="card form-grid section" method="get">
-        <label>Mercado<select name="mercado" defaultValue={market}><option value="US">🇺🇸 Internacional</option><option value="BR">🇧🇷 Brasil</option></select></label>
+        <label>Mercado<select name="mercado" defaultValue={market}><option value="US">Internacional</option><option value="BR">Brasil</option></select></label>
         <label>Ativo<input name="ativo" list="ativos" defaultValue={ticker} placeholder="NVDA, ITUB4, HGLG11…" required autoCapitalize="characters" /></label>
         <label>Valor a investir ({cur})<input name="valor" inputMode="decimal" defaultValue={sp.valor ?? ""} placeholder="ex.: 500" /></label>
         <label>Preço (opcional)<input name="preco" inputMode="decimal" defaultValue={sp.preco ?? ""} placeholder="atual" /></label>

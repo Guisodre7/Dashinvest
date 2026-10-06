@@ -65,7 +65,6 @@ export default function AllocationView({ result, cur = "US$" }: { result: Alloca
                   <ul className="clean small">{l.risks.map((r) => <li key={r}>{r}</li>)}</ul>
                 </div>
               </div>
-              <div className="xsmall faint">Dados utilizados: {l.dataUsed.join(" · ")}</div>
             </div>
           </details>
         ))}

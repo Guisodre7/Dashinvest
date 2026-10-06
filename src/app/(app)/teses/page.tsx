@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagBR, FlagUS } from "@/components/Icons";
 import ActionForm from "@/components/ActionForm";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
@@ -24,7 +25,7 @@ export default async function TesesPage({ searchParams }: { searchParams: Promis
         <section className="section card stack">
           <h3>Nova tese</h3>
           <ActionForm action={createThesis} submitLabel="Salvar tese">
-            <label>Mercado<select name="market" defaultValue={sp.mercado === "BR" ? "BR" : "US"}><option value="US">🇺🇸 Internacional</option><option value="BR">🇧🇷 Brasil</option></select></label>
+            <label>Mercado<select name="market" defaultValue={sp.mercado === "BR" ? "BR" : "US"}><option value="US">Internacional</option><option value="BR">Brasil</option></select></label>
             <label>Ativo<input name="ticker" defaultValue={sp.ativo ?? ""} required placeholder="NU, ITUB4…" autoCapitalize="characters" /></label>
             <label>Preço na data<input name="price" inputMode="decimal" defaultValue={sp.preco ?? ""} /></label>
             <label>Quantidade (opcional)<input name="quantity" inputMode="decimal" /></label>
@@ -47,7 +48,7 @@ export default async function TesesPage({ searchParams }: { searchParams: Promis
               return (
                 <li key={t.id} className="m-row">
                   <Link href={`/teses/${t.id}`} className="row-between">
-                    <span><span className="ticker">{t.market === "BR" ? "🇧🇷" : "🇺🇸"} {t.ticker}</span> <span className="xsmall faint">{new Date(t.created_at).toLocaleDateString("pt-BR")}{t.status === "encerrada" ? " · encerrada" : ""}</span></span>
+                    <span><span className="ticker">{t.market === "BR" ? <FlagBR size={11} /> : <FlagUS size={11} />} {t.ticker}</span> <span className="xsmall faint">{new Date(t.created_at).toLocaleDateString("pt-BR")}{t.status === "encerrada" ? " · encerrada" : ""}</span></span>
                     <span className="badge">{last ? last.conclusion : "sem revisão"}</span>
                   </Link>
                   <div className="m-row-sub small muted">{t.text.slice(0, 160)}{t.text.length > 160 ? "…" : ""}</div>

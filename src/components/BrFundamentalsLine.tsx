@@ -12,7 +12,6 @@ export default function BrFundamentalsLine({ v, error }: { v: BrStanceView; erro
   return (
     <div className="xsmall stack" style={{ gap: 4 }}>
       <div className="row-wrap">{items.map(([k, val]) => <span key={k} className="chip">{k}: <strong>{val}</strong></span>)}</div>
-      {v.methods.length > 0 && <span className="muted">Métodos: {v.methods.map((m) => `${m.label} R$ ${f2(m.value)}`).join(" · ")}</span>}
       {v.qualityNotes.length > 0 && <span className="muted">Qualidade: {v.qualityNotes.join(" · ")}</span>}
       <span className="faint">Fonte: Fundamentus{f.asOf ? ` · balanço de ${f.asOf.split("-").reverse().join("/")}` : ""} · cotação brapi</span>
     </div>

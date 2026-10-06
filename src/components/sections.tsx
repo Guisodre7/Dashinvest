@@ -232,7 +232,7 @@ export function MacroPanel({ macro, regime, impacts, events }: { macro: MacroInd
   );
 }
 
-export function Kpi({ label, value, sub, cls }: { label: string; value: React.ReactNode; sub?: React.ReactNode; cls?: string }) {
+export function Kpi({ label, value, sub, cls }: { label: React.ReactNode; value: React.ReactNode; sub?: React.ReactNode; cls?: string }) {
   return (
     <div className="card card-tight">
       <div className="kpi-label">{label}</div>

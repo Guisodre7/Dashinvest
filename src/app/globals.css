@@ -520,3 +520,10 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 
 /* Resumo: venda parcial sugerida */
 .sell-item + .sell-item { border-top: 1px dashed var(--border); padding-top: 10px; }
+.ico-flag { display: inline-block; vertical-align: -2px; border-radius: 3px; box-shadow: 0 0 0 1px rgb(0 0 0 / .08); flex: none; }
+.market-switch a .ico-flag { margin-right: 4px; }
+.tab-ico svg { display: block; }
+/* Bolinha de status (no lugar de emoji): herda a cor do selo. */
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; font-style: normal; flex: none; }
+.band-dot-forte { background: #1d6b4f; } .band-dot-atrativo { background: #4c9a74; } .band-dot-justo { background: #c9a227; }
+.band-dot-esticado { background: #d9822b; } .band-dot-extremo { background: #a23b2a; }

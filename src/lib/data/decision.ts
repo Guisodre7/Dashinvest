@@ -1,4 +1,5 @@
 import "server-only";
+import { getBrRates } from "../market/brRates";
 import { brStanceOne } from "../analysis/brStance";
 import { computeStance, type Stance } from "../analysis/stance";
 import { parseTaxSettings, usStanceInput } from "../analysis/stanceInput";
@@ -99,15 +100,16 @@ async function loadUs(user: SessionUser, ticker: string, priceOverride: number |
 async function loadBr(user: SessionUser, code: string, priceOverride: number | null): Promise<DecisionPacket> {
   const ctx = await loadContext(user);
   const br = await loadBrazil(ctx.repo);
-  const [{ data, errors }, rawTax, q] = await Promise.all([
+  const [{ data, errors }, rawTax, q, rates] = await Promise.all([
     getBrFundamentals([code]), ctx.repo.getSetting(TAX_KEY).catch(() => null),
     br.quotes[code] !== undefined ? Promise.resolve({ quotes: br.quotes, errors: br.quoteErrors }) : getBrQuotes([code]),
+    getBrRates(),
   ]);
   const quote = q.quotes[code] ?? null;
   const fund = data[code] ?? null;
   if (!quote && !fund) return empty("BR", code, "R$", `Sem cotação nem fundamentos para ${code} (${q.errors[code] ?? errors[code] ?? "sem resposta"}).`);
   const quotes = { ...q.quotes, [code]: priceOverride !== null && quote ? { ...quote, price: priceOverride } : quote };
-  const view = brStanceOne(code, br.strategy, br.summary, br.entries, quotes, data, parseTaxSettings(rawTax));
+  const view = brStanceOne(code, br.strategy, br.summary, br.entries, quotes, data, parseTaxSettings(rawTax), undefined, rates?.real ?? null);
   if (priceOverride !== null && !quote) view.price = priceOverride;
   const h = br.summary.holdings.find((x) => x.code === code);
   const fu = fund;

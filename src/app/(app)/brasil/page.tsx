@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagBR } from "@/components/Icons";
 import ActionForm from "@/components/ActionForm";
 import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
@@ -93,7 +94,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
 
       <section className="hero">
         <div>
-          <div className="hero-title">🇧🇷 Carteira Brasil</div>
+          <div className="hero-title"><FlagBR size={12} /> Carteira Brasil</div>
           <div className="hero-value num">{brl(s.currentValue)}</div>
           <div className="row-wrap small muted">
             <span>Capital aportado líquido <strong className="num">{brl(s.netContributed)}</strong></span>

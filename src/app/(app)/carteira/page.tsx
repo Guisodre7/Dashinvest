@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagUS } from "@/components/Icons";
 import ActionForm from "@/components/ActionForm";
 import BuyTradeForm from "@/components/BuyTradeForm";
 import DividendForm from "@/components/DividendForm";
@@ -38,7 +39,7 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="stack" style={{ gap: 0 }}>
-      <section className="hero"><div><div className="hero-title">🇺🇸 Carteira Internacional</div><h1>Movimentar</h1><p className="muted small">Compras, vendas e proventos — qualquer ativo da NYSE/Nasdaq (ativos novos são conferidos e cadastrados ao salvar). Nenhuma ordem é enviada a corretoras.</p></div></section>
+      <section className="hero"><div><div className="hero-title"><FlagUS size={12} /> Carteira Internacional</div><h1>Movimentar</h1><p className="muted small">Compras, vendas e proventos — qualquer ativo da NYSE/Nasdaq (ativos novos são conferidos e cadastrados ao salvar). Nenhuma ordem é enviada a corretoras.</p></div></section>
 
 
       <section className="section">

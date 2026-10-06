@@ -40,6 +40,8 @@ export interface AssetInput {
   targetWeight: number;
   /** Drawdown do mercado amplo (SPY/VOO) em 1 mês — ajuda a distinguir correção de mercado. */
   benchmarkDd1m?: number | null;
+  /** Treasury 10 anos (%), usado no desconto do fluxo de caixa. */
+  riskFreePct?: number | null;
   errors?: string[];
 }
 
@@ -151,7 +153,7 @@ export function analyzeAsset(input: AssetInput, settings: EngineSettings, now = 
   const trend = estimateTrend(estimates, input.estimateHistory);
   const consensus = consensusView(analysts, price);
   const valuation = valuationView(fundamentals, trend);
-  const fairValue = fairValueView(price, fundamentals, trend, analysts, input.isEtf);
+  const fairValue = fairValueView(price, fundamentals, trend, analysts, input.isEtf, input.riskFreePct ?? null);
   const quality = input.isEtf ? null : businessQuality(fundamentals);
   const news = rankNews(input.news, input.ticker, input.name, now);
   const nSignal = newsSignal(news, 72, now);

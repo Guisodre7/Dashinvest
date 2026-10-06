@@ -196,7 +196,7 @@ export interface DividendInfo {
 }
 
 export interface MacroIndicator {
-  key: "SPX" | "NDX" | "DJI" | "VIX" | "US10Y" | "FEDFUNDS" | "DXY" | "USDBRL";
+  key: "SPX" | "NDX" | "DJI" | "VIX" | "US10Y" | "FEDFUNDS" | "DXY" | "USDBRL" | "HYSPREAD" | "EPU";
   label: string;
   value: number | null;
   change: number | null;
@@ -207,6 +207,8 @@ export interface MacroIndicator {
   /** Quando o valor vem de um ETF substituto (ex.: SPY para S&P 500). */
   proxy: string | null;
   meta: DataMeta | null;
+  /** Referência de 1 ano (mediana) — para saber se o valor atual está alto ou baixo. */
+  ref?: number | null;
 }
 
 export class ProviderUnavailableError extends Error {

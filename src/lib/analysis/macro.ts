@@ -105,3 +105,26 @@ export const FOMC_2026 = [
   "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
   "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
 ];
+
+export type MarketMood = "medo" | "normal" | "euforia";
+
+/**
+ * Humor do mercado para o RITMO do aporte (não muda o valor justo):
+ * medo = volatilidade/estresse de crédito/incerteza política altos ou queda forte;
+ * euforia = volatilidade baixa, crédito apertado e alta forte.
+ */
+export function marketMood(ind: MacroIndicator[], spy: Momentum | null): { mood: MarketMood; reasons: string[] } {
+  const v = (k: MacroIndicator["key"]) => ind.find((i) => i.key === k);
+  const vix = v("VIX")?.value ?? null, hy = v("HYSPREAD")?.value ?? null, epu = v("EPU");
+  const fear: string[] = [], greed: string[] = [];
+  if (vix !== null && vix >= 25) fear.push(`VIX ${vix.toFixed(0)}`);
+  if (hy !== null && hy >= 5) fear.push(`spread de crédito ${hy.toFixed(1)}%`);
+  if (epu?.value != null && epu.ref && epu.value >= epu.ref * 1.5) fear.push("incerteza política alta");
+  if (spy?.ret_1m != null && spy.ret_1m <= -8) fear.push(`S&P ${spy.ret_1m.toFixed(0)}% no mês`);
+  if (vix !== null && vix <= 14) greed.push("VIX baixo");
+  if (hy !== null && hy <= 3) greed.push("crédito apertado");
+  if (spy?.ret_6m != null && spy.ret_6m >= 15) greed.push(`S&P +${spy.ret_6m.toFixed(0)}% em 6 meses`);
+  if (fear.length >= 2 || (vix !== null && vix >= 32)) return { mood: "medo", reasons: fear };
+  if (greed.length >= 2 && !fear.length) return { mood: "euforia", reasons: greed };
+  return { mood: "normal", reasons: [] };
+}

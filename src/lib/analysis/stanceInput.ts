@@ -1,6 +1,7 @@
 import type { TransactionRow } from "../db/repo";
 import type { PortfolioSummary } from "../portfolio/calc";
 import type { AssetAnalysis } from "./analyze";
+import { analystSignal } from "./analystSignal";
 import { computeStance, DEFAULT_TAX, type Stance, type StanceInput, type TaxRules } from "./stance";
 
 export type TaxSettings = typeof DEFAULT_TAX;
@@ -52,6 +53,15 @@ export function usStanceInput(a: AssetAnalysis, portfolio: PortfolioSummary, tra
       position: p && p.quantity > 0 ? { quantity: p.quantity, avgCost: p.quantity ? p.costUsd / p.quantity : p.avgPrice, value: p.valueUsd ?? 0 } : null,
       lastSell: sell ? { date: sell.trade_date, price: sell.price!, quantity: sell.quantity! } : null,
       tax: tax.US, currency: "US$",
+      ...usConfirmations(a),
     };
   }
+}
+
+/** Confirmações do valuation: analistas (sinal e divergência) e DCF reverso. */
+export function usConfirmations(a: AssetAnalysis): Pick<StanceInput, "analystScore" | "uncertain" | "impliedGap"> {
+  const sig = analystSignal(a.trend, a.analysts);
+  const fv = a.fairValue;
+  const impliedGap = fv.implied_growth != null && fv.base_growth != null ? fv.implied_growth - fv.base_growth : null;
+  return { analystScore: sig.score, uncertain: (sig.dispersion ?? 0) > 0.6 || fairFromAnalysis(a)?.basis === "historical-multiple", impliedGap };
 }

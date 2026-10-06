@@ -1,5 +1,7 @@
 import type { AssetAnalysis } from "./analyze";
 import type { EngineSettings } from "./settings";
+import { analystSignal } from "./analystSignal";
+import type { MarketMood } from "./macro";
 import { ACTION_META, type ActionKey } from "./stance";
 
 export type Action = "COMPRAR" | "APORTE NORMAL" | "AGUARDAR";
@@ -52,6 +54,8 @@ export interface AllocationInput {
   globalBlockReasons?: string[];
   /** Postura de valuation de cada ticker (mesma da tela de valuation). */
   stances?: Record<string, ActionKey>;
+  /** Humor do mercado: medo = aporta tudo nas oportunidades; euforia = guarda mais caixa. */
+  mood?: { mood: MarketMood; reasons: string[] };
 }
 
 /** Posturas em que o aporte espera: bom ativo caro, realização, tese em risco. */
@@ -127,7 +131,10 @@ export function allocate(input: AllocationInput): AllocationResult {
       action = "AGUARDAR"; mult = 0;
       reasons.push(`valuation: ${ACTION_META[st].label.toLowerCase()} — não é momento de aumentar`);
     }
-    if ((st === "comprar" || st === "recompra") && mult > 0) mult *= 1.4;
+    if ((st === "comprar" || st === "recompra") && mult > 0) mult *= input.mood?.mood === "medo" ? 2 : 1.4;
+    // Analistas melhorando a visão puxam um pouco mais; piorando, um pouco menos.
+    const sig = analystSignal(a.trend, a.analysts).score;
+    if (sig !== null && mult > 0) mult *= 1 + 0.25 * sig;
     if (need <= 0) { action = action ?? "AGUARDAR"; reasons.push("acima do peso-alvo"); }
     return { a, need, mult, action, cap, blocked, reasons };
   });
@@ -139,12 +146,17 @@ export function allocate(input: AllocationInput): AllocationResult {
   const maxBalance = settings.maxOpportunityCashContributions * contribution;
   let cash = 0;
   let cashReason: string | null = null;
-  if (waitingTargetShare > 0 && settings.maxOpportunityCashPct > 0) {
+  // Ritmo: com medo no mercado o aporte vai todo para quem está na faixa; com euforia, guarda mais.
+  const mood = input.mood?.mood ?? "normal";
+  const cashPct = mood === "medo" ? 0 : mood === "euforia" ? Math.min(0.5, settings.maxOpportunityCashPct * 1.5) : settings.maxOpportunityCashPct;
+  if (mood === "medo") notes.push(`Mercado com medo (${input.mood!.reasons.join(", ")}): momento de aportar tudo nas oportunidades, sem guardar caixa.`);
+  if (mood === "euforia" && waitingTargetShare > 0) notes.push(`Mercado eufórico (${input.mood!.reasons.join(", ")}): uma parte maior fica em caixa para comprar mais barato depois.`);
+  if (waitingTargetShare > 0 && cashPct > 0) {
     const room = Math.max(0, maxBalance - input.existingOpportunityCash);
-    cash = Math.min(contribution * settings.maxOpportunityCashPct, contribution * waitingTargetShare, room);
+    cash = Math.min(contribution * cashPct, contribution * waitingTargetShare, room);
     cash = Math.floor(cash * 100) / 100;
     if (cash > 0) {
-      cashReason = `${waitingNeed.map((w) => w.a.ticker).join(", ")} em AGUARDAR com peso abaixo do alvo. Até ${fmt(settings.maxOpportunityCashPct * 100, 0)}% do aporte pode ficar em caixa; saldo máximo de ${fmt(settings.maxOpportunityCashContributions, 0)} aporte(s).`;
+      cashReason = `${waitingNeed.map((w) => w.a.ticker).join(", ")} em AGUARDAR com peso abaixo do alvo. Até ${fmt(cashPct * 100, 0)}% do aporte pode ficar em caixa; saldo máximo de ${fmt(settings.maxOpportunityCashContributions, 0)} aporte(s).`;
     } else if (room <= 0) {
       notes.push("Caixa de oportunidade já está no limite acumulado — todo o aporte é distribuído.");
     }

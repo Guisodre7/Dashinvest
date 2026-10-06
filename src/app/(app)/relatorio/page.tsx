@@ -1,4 +1,5 @@
 import { allocate } from "@/lib/analysis/allocation";
+import { FlagBR } from "@/components/Icons";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
 import { loadStances, stanceActions } from "@/lib/data/stances";
@@ -32,7 +33,7 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   const events = [...analyses.flatMap((a) => a.events), ...ctx.macroEvents].filter((e) => e.date <= nextMonth).sort((a, b) => a.date.localeCompare(b.date));
   const values = Object.fromEntries(p.positions.map((x) => [x.ticker, x.valueUsd ?? 0]));
   const amount = defaultAmount ?? 550;
-  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances) });
+  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances), mood: ctx.mood });
 
   return (
     <article className="stack" style={{ maxWidth: 820, gap: 0 }}>
@@ -101,7 +102,7 @@ async function BrReport() {
   const sum = (kinds: string[]) => month.filter((e) => kinds.includes(e.kind)).reduce((a, e) => a + e.amount, 0);
   return (
     <div className="stack" style={{ gap: 0 }}>
-      <section className="hero"><div><div className="hero-title">🇧🇷 Carteira Brasil</div><h1>Relatório — últimos 30 dias</h1></div></section>
+      <section className="hero"><div><div className="hero-title"><FlagBR size={12} /> Carteira Brasil</div><h1>Relatório — últimos 30 dias</h1></div></section>
       <section className="section grid grid-4">
         <div className="card card-tight"><div className="kpi-label">Aportes / compras</div><div className="kpi-value num">{brl(sum(["buy", "contribution"]))}</div></div>
         <div className="card card-tight"><div className="kpi-label">Vendas / resgates</div><div className="kpi-value num">{brl(sum(["sell", "redemption"]))}</div></div>

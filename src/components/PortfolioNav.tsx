@@ -1,6 +1,7 @@
 "use client";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { FlagBR, FlagUS, IconBook, IconGlobe, IconSearch } from "./Icons";
 
 type Ctx = "US" | "BR" | "ALL";
 
@@ -57,8 +58,8 @@ function Pending({ children }: { children: React.ReactNode }) {
 export function MarketSwitch() {
   const path = usePathname(), params = useSearchParams();
   const ctx = portfolioContext(path, params);
-  const items: { key: Ctx; href: string; label: string }[] = [
-    { key: "BR", href: "/brasil", label: "🇧🇷 Brasil" }, { key: "US", href: "/", label: "🇺🇸 Internacional" }, { key: "ALL", href: "/geral", label: "Visão geral" },
+  const items: { key: Ctx; href: string; label: React.ReactNode }[] = [
+    { key: "BR", href: "/brasil", label: <><FlagBR size={13} /> Brasil</> }, { key: "US", href: "/", label: <><FlagUS size={13} /> Internacional</> }, { key: "ALL", href: "/geral", label: "Visão geral" },
   ];
   return (
     <nav className="market-switch" aria-label="Carteira">
@@ -87,11 +88,11 @@ export function MobileBar() {
   const path = usePathname(), params = useSearchParams();
   const ctx = portfolioContext(path, params);
   const items = [
-    { key: "BR", href: "/brasil", label: "Brasil", icon: "🇧🇷", on: ctx === "BR" && !path.startsWith("/analisar") },
-    { key: "US", href: "/", label: "Internac.", icon: "🇺🇸", on: ctx === "US" && !path.startsWith("/analisar") },
-    { key: "ALL", href: "/geral", label: "Geral", icon: "🌐", on: path.startsWith("/geral") || path.startsWith("/oportunidades") && ctx === "ALL" },
-    { key: "AN", href: "/analisar", label: "Analisar", icon: "🔎", on: path.startsWith("/analisar") },
-    { key: "TE", href: "/teses", label: "Teses", icon: "📓", on: path.startsWith("/teses") },
+    { key: "BR", href: "/brasil", label: "Brasil", icon: <FlagBR size={15} />, on: ctx === "BR" && !path.startsWith("/analisar") },
+    { key: "US", href: "/", label: "Internac.", icon: <FlagUS size={15} />, on: ctx === "US" && !path.startsWith("/analisar") },
+    { key: "ALL", href: "/geral", label: "Geral", icon: <IconGlobe />, on: path.startsWith("/geral") || path.startsWith("/oportunidades") && ctx === "ALL" },
+    { key: "AN", href: "/analisar", label: "Analisar", icon: <IconSearch />, on: path.startsWith("/analisar") },
+    { key: "TE", href: "/teses", label: "Teses", icon: <IconBook />, on: path.startsWith("/teses") },
   ];
   return (
     <nav className="tabbar" aria-label="Seções">

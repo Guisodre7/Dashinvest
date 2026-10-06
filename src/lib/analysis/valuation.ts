@@ -1,5 +1,8 @@
 import type { AnalystData, Fundamentals } from "../market/types";
+import { baseGrowth, dcfPerShare, discountRate, impliedGrowth } from "./dcf";
 import type { EstimateTrend } from "./estimates";
+
+const median = (sorted: number[]) => sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
 
 export interface ValuationView {
   pe: number | null;
@@ -89,6 +92,9 @@ export interface FairValueView {
   uncertainty_pct: number | null;
   available: boolean;
   reason: string | null;
+  /** DCF reverso: crescimento anual que o preço embute × crescimento base da empresa (frações). */
+  implied_growth?: number | null;
+  base_growth?: number | null;
 }
 
 /**
@@ -101,6 +107,7 @@ export function fairValueView(
   trend: EstimateTrend | null,
   analysts: AnalystData | null,
   isEtf: boolean,
+  riskFreePct: number | null = null,
 ): FairValueView {
   const empty = (reason: string): FairValueView => ({
     estimates: [], min: null, mean: null, max: null, discount_pct: null, uncertainty_pct: null, available: false, reason,
@@ -126,21 +133,33 @@ export function fairValueView(
     est.push({ method: `EPS 12m × P/L histórico ${refPe.toFixed(0)}x${capped ? " (teto)" : ""}`, value: f.eps_ttm * refPe, source: f.meta.source });
   }
 
-  if (est.length < 2) {
-    return { ...empty(est.length === 1 ? "Fair value indisponível — apenas uma estimativa encontrada (mínimo 2)." : "Fair value indisponível."), estimates: est };
+  // 4) Fluxo de caixa descontado, com juros de 10 anos no desconto (juro alto = valor menor).
+  const fcfPs = price && f?.pfcf && f.pfcf > 0 ? price / f.pfcf : null;
+  const g = baseGrowth([f?.fcf_growth, f?.eps_growth_3y, f?.revenue_growth_3y, trend?.expected_eps_growth]);
+  let implied: number | null = null;
+  if (fcfPs && g !== null && riskFreePct !== null) {
+    const r = discountRate(riskFreePct, f?.beta ?? null);
+    est.push({ method: "Fluxo de caixa descontado", value: dcfPerShare(fcfPs, g, r), source: `${f!.meta.source} + FRED` });
+    implied = impliedGrowth(price!, fcfPs, r);
   }
-  const vals = est.map((e) => e.value);
-  // Mediana com 3 métodos: um método fora da curva não puxa a faixa.
-  const sorted = [...vals].sort((a, b) => a - b);
-  const mean = sorted.length === 3 ? sorted[1] : vals.reduce((a, b) => a + b, 0) / vals.length;
-  const min = Math.min(...vals), max = Math.max(...vals);
+  const extra = { implied_growth: implied, base_growth: g };
+
+  if (est.length < 2) {
+    return { ...empty(est.length === 1 ? "Fair value indisponível — apenas uma estimativa encontrada (mínimo 2)." : "Fair value indisponível."), estimates: est, ...extra };
+  }
+  // Mediana dos métodos: um método fora da curva não puxa a faixa; a divergência é medida
+  // entre os métodos próximos da mediana (com 3+ métodos, o mais distante é descartado).
+  const sorted = est.map((e) => e.value).sort((a, b) => a - b);
+  const mean = median(sorted);
+  const kept = sorted.length >= 3 ? [...sorted].sort((a, b) => Math.abs(b - mean) - Math.abs(a - mean)).slice(1) : sorted;
+  const min = Math.min(...kept), max = Math.max(...kept);
   const spread = ((max - min) / mean) * 100;
   if (spread > 80) {
-    return { ...empty("Os dados disponíveis são conflitantes — estimativas de fair value divergem mais de 80%."), estimates: est, min, mean, max, uncertainty_pct: spread };
+    return { ...empty("Os dados disponíveis são conflitantes — estimativas de fair value divergem mais de 80%."), estimates: est, min, mean, max, uncertainty_pct: spread, ...extra };
   }
   // Desconto/prêmio extremo em empresa grande quase sempre é dado ruim, não oportunidade.
   if (price && (price / mean < PLAUSIBLE[0] || price / mean > PLAUSIBLE[1])) {
-    return { ...empty(`Valor justo calculado (US$ ${mean.toFixed(2)}) está longe demais do preço (US$ ${price.toFixed(2)}) para ser confiável — sem faixa até os dados confirmarem.`), estimates: est, min, mean, max, uncertainty_pct: spread };
+    return { ...empty(`Valor justo calculado (US$ ${mean.toFixed(2)}) está longe demais do preço (US$ ${price.toFixed(2)}) para ser confiável — sem faixa até os dados confirmarem.`), estimates: est, min, mean, max, uncertainty_pct: spread, ...extra };
   }
   return {
     estimates: est, min, mean, max,
@@ -148,6 +167,7 @@ export function fairValueView(
     uncertainty_pct: spread,
     available: true,
     reason: null,
+    ...extra,
   };
 }
 

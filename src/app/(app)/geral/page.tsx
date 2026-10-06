@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FlagBR, FlagUS } from "@/components/Icons";
 import ActionForm from "@/components/ActionForm";
 import { Kpi, MacroPanel, WeightBar } from "@/components/sections";
 import { splitMonthly } from "@/lib/allocation/split";
@@ -88,9 +89,9 @@ export default async function GeralPage({ searchParams }: { searchParams: Promis
         {plan && (
           <>
             <div className="grid grid-2">
-              <div className="callout"><div className="kpi-label">🇧🇷 Brasil</div><div className="kpi-value num">{brl(plan.brBrl)}</div>
+              <div className="callout"><div className="kpi-label"><FlagBR size={11} /> Brasil</div><div className="kpi-value num">{brl(plan.brBrl)}</div>
                 {plan.brBrl > 0 && <a className="btn btn-sm" href={`/brasil?aba=aporte&valor=${plan.brBrl}`}>Distribuir na carteira Brasil →</a>}</div>
-              <div className="callout"><div className="kpi-label">🇺🇸 Exterior</div><div className="kpi-value num">{brl(plan.usBrl)}{plan.usUsd !== null && <span className="small muted"> ≈ {usd(plan.usUsd)}</span>}</div>
+              <div className="callout"><div className="kpi-label"><FlagUS size={11} /> Exterior</div><div className="kpi-value num">{brl(plan.usBrl)}{plan.usUsd !== null && <span className="small muted"> ≈ {usd(plan.usUsd)}</span>}</div>
                 {plan.usUsd !== null && plan.usUsd > 0 && <a className="btn btn-sm" href={`/?aba=aporte&valor=${plan.usUsd}`}>Distribuir na carteira internacional →</a>}</div>
             </div>
             <ul className="clean small">{plan.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
@@ -106,8 +107,8 @@ export default async function GeralPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="section grid grid-4">
-        <Kpi label="🇧🇷 Brasil" value={brl(b.currentValue)} sub={`${n(share(b.currentValue), 1)}% do total`} />
-        <Kpi label="🇺🇸 Exterior" value={usd(us.totalUsd)} sub={usBrl !== null ? `${brl(usBrl)} · ${n(share(usBrl), 1)}% do total` : "câmbio indisponível"} />
+        <Kpi label={<><FlagBR size={11} /> Brasil</>} value={brl(b.currentValue)} sub={`${n(share(b.currentValue), 1)}% do total`} />
+        <Kpi label={<><FlagUS size={11} /> Exterior</>} value={usd(us.totalUsd)} sub={usBrl !== null ? `${brl(usBrl)} · ${n(share(usBrl), 1)}% do total` : "câmbio indisponível"} />
         <Kpi label="Renda gerada (Brasil)" value={brl(b.income)} sub={`exterior: ${usd(us.dividendsUsd)} em proventos`} />
         <Kpi label="Ganho de mercado (Brasil)" value={b.marketGain !== null ? brl(b.marketGain) : "—"} cls={tone(b.marketGain)} sub={`exterior: ${usd(us.pnlUsd)} (${pct(us.assetReturn, 1, true)})`} />
       </section>

@@ -5,7 +5,7 @@ import { cache } from "react";
 import { analyzeAsset, type AssetAnalysis, type StrategyRow } from "../analysis/analyze";
 import { deriveAlerts } from "../analysis/alerts";
 import { computeMomentum, type Momentum } from "../analysis/indicators";
-import { FOMC_2026, macroImpacts, regimeReadings, type MacroDriverImpact, type RegimeReading } from "../analysis/macro";
+import { FOMC_2026, macroImpacts, marketMood, regimeReadings, type MacroDriverImpact, type MarketMood, type RegimeReading } from "../analysis/macro";
 import { mergeSettings, type EngineSettings } from "../analysis/settings";
 import type { SessionUser } from "../auth";
 import { getRepo, getServiceRepo, type AlertRow, type Repo } from "../db/repo";
@@ -33,6 +33,8 @@ export interface LoadedContext {
   fxStale: boolean;
   macro: MacroIndicator[];
   regime: RegimeReading[];
+  /** Humor do mercado (ritmo do aporte). */
+  mood: { mood: MarketMood; reasons: string[] };
   impacts: MacroDriverImpact[];
   marketNews: NewsItem[];
   macroEvents: MarketEvent[];
@@ -183,6 +185,7 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
   const spyMomentum: Momentum | null = spyHistory && spyHistory.bars.length > 30 ? computeMomentum(spyHistory.bars, macroQuotes[0]?.price) : null;
   const macro = buildMacro(macroRaw ?? [], macroQuotes, fx, spyMomentum);
   const regime = regimeReadings(macro, spyMomentum);
+  const mood = marketMood(macro, spyMomentum);
 
   const targetSum = strategy.filter((s) => s.enabled && !s.is_legacy).reduce((a, s) => a + s.target_weight, 0) || 100;
   const posView = new Map(portfolio.positions.map((p) => [p.ticker, p]));
@@ -212,6 +215,7 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
         currentWeight: s.is_legacy ? view?.weightTotal ?? 0 : view?.weightStrategic ?? 0,
         targetWeight: s.enabled && !s.is_legacy ? (s.target_weight / targetSum) * 100 : 0,
         benchmarkDd1m: spyMomentum?.ret_1m ?? null,
+        riskFreePct: macro.find((m) => m.key === "US10Y")?.value ?? null,
         errors: p.errors,
       }, settings, now);
     });
@@ -226,7 +230,7 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
   }));
 
   return {
-    user, settings, strategy, portfolio, positions, dividends, analyses, quotes, fx, fxStale, macro, regime,
+    user, settings, strategy, portfolio, positions, dividends, analyses, quotes, fx, fxStale, macro, regime, mood,
     impacts: macroImpacts(regime), marketNews: (marketNews ?? []).slice(0, 20), macroEvents, alerts,
     providerName: provider.name, isDemo: isDemoProvider(), errors,
     opportunityCashBalance: typeof cashBalance === "number" ? cashBalance : 0,
@@ -256,7 +260,7 @@ function buildMacro(rates: MacroIndicator[], quotes: (Quote | null)[], fx: FxRat
     fromQuote("SPX", "S&P 500", spyQ, "SPY", spy?.ret_1m ?? null),
     fromQuote("NDX", "Nasdaq-100", qqq, "QQQ"),
     fromQuote("DJI", "Dow Jones", dia, "DIA"),
-    { key: "VIX", label: "VIX", value: null, change: null, change_pct: null, change_1m: null, unit: "points", proxy: null, meta: null },
+    ...(rates.some((r) => r.key === "VIX") ? [] : [{ key: "VIX" as const, label: "VIX", value: null, change: null, change_pct: null, change_1m: null, unit: "points" as const, proxy: null, meta: null }]),
     ...rates,
     fromQuote("DXY", "Índice do dólar", uup, "UUP"),
   ];
