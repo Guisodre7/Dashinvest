@@ -127,8 +127,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       {tab === "carteira" && (
         <section className="section">
-          <div className="section-head"><h2>Carteira</h2><Link href="/carteira" className="small muted">Editar posições →</Link></div>
-          <LivePortfolioTable />
+          <div className="section-head"><h2>Posições</h2><Link href="/carteira" className="small muted">Registrar compra/venda →</Link></div>
+          <LivePortfolioTable heldOnly />
           <p className="xsmall faint" style={{ marginTop: 6 }}>Pesos sobre a carteira estratégica (exclui a posição legada VOO). Retorno total BRL = (1 + retorno do ativo) × (1 + retorno cambial) − 1.</p>
         </section>
       )}

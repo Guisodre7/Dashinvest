@@ -50,8 +50,6 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
     return q ? humanAge(Math.max(0, Math.round((Date.now() - new Date(q.meta.timestamp).getTime()) / 1000))) : null;
   };
   const label = (h: { code: string; name: string | null; asset_class: Parameters<typeof PRICED.has>[0] }) => (PRICED.has(h.asset_class) ? h.code : h.name ?? h.code);
-  const owned = new Set(s.holdings.map((h) => h.code));
-  const watch = strategy.assets.filter((a) => a.enabled && !owned.has(a.code));
   const recent = [...br.entries].reverse().slice(0, 30);
 
   return (
@@ -258,14 +256,17 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         <>
       <section className="section grid grid-2">
         <div>
-          <div className="section-head"><h2>Acompanhamento</h2><span className="xsmall faint">ativos da estratégia sem posição</span></div>
+          <div className="section-head"><h2>Ativos da estratégia</h2><span className="xsmall faint">meta · posição ou cotação</span></div>
           <div className="card stack small">
-            {watch.length === 0 ? <span className="faint">Todos os ativos da estratégia já estão na carteira.</span> : watch.map((a) => {
+            {strategy.assets.filter((a) => a.enabled).map((a) => {
               const q = quotes[a.code];
+              const h = s.holdings.find((x) => x.code === a.code && x.quantity > 0);
+              const nIn = strategy.assets.filter((x) => x.enabled && x.asset_class === a.asset_class).length || 1;
               return (
                 <div key={a.code} className="row-between">
-                  <span><strong>{a.code}</strong> <span className="faint xsmall">{a.name ?? ""} · {CLASS_LABEL[a.asset_class]}</span></span>
-                  <span className="num">{q?.price != null ? <>{brl(q.price)} <span className={`xsmall ${tone(q.change_pct)}`}>{pct(q.change_pct, 2, true)}</span></> : <span className="xsmall faint">sem cotação{br.quoteErrors[a.code] ? ` · ${br.quoteErrors[a.code]}` : ""}</span>}</span>
+                  <span><strong>{a.code}</strong> <span className="faint xsmall">{n(strategy.classes[a.asset_class] / nIn, 2)}% · {CLASS_LABEL[a.asset_class]}</span></span>
+                  {h ? <span className="num">{brl(h.value)} <span className="xsmall muted">{n(h.weight, 1)}% da carteira</span></span>
+                    : <span className="num xsmall faint">sem posição · {q?.price != null ? <>{brl(q.price)} <span className={tone(q.change_pct)}>{pct(q.change_pct, 2, true)}</span></> : `sem cotação${br.quoteErrors[a.code] ? ` · ${br.quoteErrors[a.code]}` : ""}`}</span>}
                 </div>
               );
             })}

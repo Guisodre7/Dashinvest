@@ -25,8 +25,8 @@ export default async function EstrategiaPage() {
   });
   const rows = [...classRows, { name: "", pct: 0, tickers: "" }, { name: "", pct: 0, tickers: "" }];
   const legacy = strategy.filter((s) => s.is_legacy).map((s) => s.ticker).join(", ");
-  const held = new Set(ctx.portfolio.positions.filter((p) => p.quantity > 0).map((p) => p.ticker));
-  const watch = active.filter((s) => !held.has(s.ticker));
+  const posOf = (t: string) => ctx.portfolio.positions.find((p) => p.ticker === t && p.quantity > 0);
+  const listed = [...active, ...strategy.filter((s) => s.is_legacy)];
 
   return (
     <div className="stack" style={{ gap: 0 }}>
@@ -34,14 +34,15 @@ export default async function EstrategiaPage() {
 
       <section className="section grid grid-2">
         <div>
-          <div className="section-head"><h2>Acompanhamento</h2><span className="xsmall faint">ativos da estratégia sem posição</span></div>
+          <div className="section-head"><h2>Ativos da estratégia</h2><span className="xsmall faint">meta · posição ou cotação</span></div>
           <div className="card stack small">
-            {watch.length === 0 ? <span className="faint">Todos os ativos da estratégia já estão na carteira.</span> : watch.map((s) => {
-              const q = ctx.quotes[s.ticker];
+            {listed.length === 0 ? <span className="faint">Nenhum ativo na estratégia.</span> : listed.map((s) => {
+              const p = posOf(s.ticker), q = ctx.quotes[s.ticker];
               return (
                 <div key={s.ticker} className="row-between">
-                  <span><strong>{s.ticker}</strong> <span className="faint xsmall">{names.get(s.ticker) ?? ""} · {s.strategy_bucket}</span></span>
-                  <span className="num">{q?.price != null ? <>{usd(q.price)} <span className={`xsmall ${tone(q.change_pct)}`}>{pct(q.change_pct, 2, true)}</span></> : <span className="xsmall faint">sem cotação</span>}</span>
+                  <span><strong>{s.ticker}</strong> <span className="faint xsmall">{s.is_legacy ? "legado" : `${n(s.target_weight, 2)}% · ${s.strategy_bucket}`}</span></span>
+                  {p ? <span className="num">{usd(p.valueUsd)} <span className="xsmall muted">{n(s.is_legacy ? p.weightTotal : p.weightStrategic, 1)}% da carteira</span></span>
+                    : <span className="num xsmall faint">sem posição · {q?.price != null ? <>{usd(q.price)} <span className={tone(q.change_pct)}>{pct(q.change_pct, 2, true)}</span></> : "sem cotação"}</span>}
                 </div>
               );
             })}
