@@ -21,6 +21,8 @@ export const serverConfig = {
   alphaVantageRealtime: process.env.ALPHA_VANTAGE_REALTIME === "true",
   /** Histórico diário e proventos (plano gratuito). */
   tiingoApiKey: process.env.TIINGO_API_KEY ?? "",
+  /** Cotações B3 (opcional no plano gratuito; sem ele só PETR4, VALE3, ITUB4, MGLU3). */
+  brapiToken: process.env.BRAPI_TOKEN ?? "",
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   llmModel: process.env.LLM_MODEL ?? "claude-opus-5",

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import MarketClock from "@/components/MarketClock";
+import MarketSwitch from "@/components/MarketSwitch";
 import NavLinks, { MobileTabBar } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 import { requireUser } from "@/lib/auth";
@@ -13,9 +14,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <header className="topbar">
         <div className="topbar-inner">
-          <Link href="/" className="brand" aria-label="Carteira Internacional — painel">
+          <Link href="/" className="brand" aria-label="DashInvest — painel">
             <svg className="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1f3a5f" /><path d="M8 21l5-6 4 3 7-8" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span className="hide-mobile">Carteira Internacional</span>
+            <span className="hide-mobile">DashInvest</span>
           </Link>
           <NavLinks />
           <MarketClock />
@@ -28,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="banner banner-warn">Modo local de desenvolvimento — sem autenticação e com armazenamento em arquivo. Indisponível em produção.</div>
         </div>
       )}
-      <main className="shell">{children}</main>
+      <main className="shell"><MarketSwitch />{children}</main>
       <MobileTabBar />
     </>
   );

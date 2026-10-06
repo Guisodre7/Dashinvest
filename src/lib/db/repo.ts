@@ -8,6 +8,7 @@ import type { AllocationResult } from "../analysis/allocation";
 import { isLocalDevMode } from "../devmode";
 import type { EarningsEstimates, AnalystData } from "../market/types";
 import type { DividendRow, PositionRow } from "../portfolio/calc";
+import type { Holding, LedgerEntry, Market } from "../portfolio/ledger";
 import { ASSET_META, DEFAULT_STRATEGY } from "../portfolio/defaults";
 import { SCENARIO_KEYS, type ScenarioKey, type ScenarioResult } from "../projection/types";
 import type { ProjectionForm, ScenarioForm } from "../projection/settings";
@@ -27,6 +28,8 @@ export interface TransactionRow {
   broker: string | null;
   trade_date: string;
   notes: string | null;
+  /** Só em vendas (requer a migração 0004). */
+  realized_pnl?: number | null;
 }
 
 export interface SnapshotRow {
@@ -111,7 +114,20 @@ export interface Repo {
   deleteProjectionSettings(): Promise<void>;
   saveProjectionRun(run: ProjectionRunInput): Promise<string>;
   listProjectionRuns(limit?: number): Promise<ProjectionRunSummary[]>;
+  /** A migração 0004 (carteira Brasil / livro de movimentações) já foi aplicada? */
+  ledgerReady(): Promise<boolean>;
+  getHoldings(market: Market): Promise<Holding[]>;
+  saveHolding(h: Holding): Promise<void>;
+  /** Ordem cronológica (data, depois criação). */
+  getLedger(market: Market, code?: string): Promise<LedgerEntry[]>;
+  addLedgerEntry(e: LedgerEntry): Promise<string | null>;
+  deleteLedgerEntry(id: string): Promise<void>;
+  /** Soma do lucro realizado nas vendas da carteira internacional (US$). */
+  getRealizedUsd(): Promise<number>;
 }
+
+// Migração 0004: confirmada uma vez por instância; "ausente" é re-testado a cada minuto.
+let ledgerReadyCache: { ok: boolean; at: number } | null = null;
 
 // ---------------------------------------------------------------------------
 // Supabase
@@ -411,6 +427,61 @@ class SupabaseRepo implements Repo {
       contributed_brl: num(r.contributed_brl) ?? 0,
     }));
   }
+
+  async ledgerReady() {
+    if (ledgerReadyCache && (ledgerReadyCache.ok || Date.now() - ledgerReadyCache.at < 60_000)) return ledgerReadyCache.ok;
+    const res = await this.db.from("ledger_entries").select("id").limit(1);
+    ledgerReadyCache = { ok: !res.error, at: Date.now() };
+    return ledgerReadyCache.ok;
+  }
+
+  async getHoldings(market: Market) {
+    const rows = this.check(await this.db.from("holdings").select("*").eq("user_id", this.userId).eq("market", market));
+    return ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id), market: r.market as Market, asset_class: r.asset_class as Holding["asset_class"], code: String(r.code),
+      name: (r.name as string) ?? null, cnpj: (r.cnpj as string) ?? null, issuer: (r.issuer as string) ?? null,
+      quantity: num(r.quantity) ?? 0, avg_price: num(r.avg_price) ?? 0, cost_basis: num(r.cost_basis) ?? 0,
+      current_value: num(r.current_value), current_value_at: (r.current_value_at as string) ?? null,
+      currency: String(r.currency ?? "BRL"), notes: (r.notes as string) ?? null,
+    }));
+  }
+
+  async saveHolding(h: Holding) {
+    const { id: _id, ...rest } = h;
+    this.check(await this.db.from("holdings").upsert(
+      { ...rest, user_id: this.userId, updated_at: new Date().toISOString() } as never,
+      { onConflict: "user_id,market,code" },
+    ));
+  }
+
+  async getLedger(market: Market, code?: string) {
+    let q = this.db.from("ledger_entries").select("*").eq("user_id", this.userId).eq("market", market);
+    if (code) q = q.eq("code", code);
+    const rows = this.check(await q.order("trade_date", { ascending: true }).order("created_at", { ascending: true }).limit(5000));
+    return ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id), market: r.market as Market, asset_class: r.asset_class as LedgerEntry["asset_class"], code: String(r.code),
+      kind: r.kind as LedgerEntry["kind"], trade_date: String(r.trade_date), quantity: num(r.quantity), price: num(r.price),
+      amount: num(r.amount) ?? 0, fees: num(r.fees) ?? 0, realized_pnl: num(r.realized_pnl), avg_price_after: num(r.avg_price_after),
+      currency: String(r.currency ?? "BRL"), source: (r.source as LedgerEntry["source"]) ?? "manual", notes: (r.notes as string) ?? null,
+      created_at: String(r.created_at),
+    }));
+  }
+
+  async addLedgerEntry(e: LedgerEntry) {
+    const { id: _id, created_at: _c, ...row } = e;
+    const rows = this.check(await this.db.from("ledger_entries").insert({ ...row, user_id: this.userId } as never).select("id")) as { id: string }[] | null;
+    return rows?.[0]?.id ?? null;
+  }
+
+  async deleteLedgerEntry(id: string) {
+    this.check(await this.db.from("ledger_entries").delete().eq("user_id", this.userId).eq("id", id));
+  }
+
+  async getRealizedUsd() {
+    if (!(await this.ledgerReady())) return 0;
+    const rows = this.check(await this.db.from("transactions").select("realized_pnl").eq("user_id", this.userId).eq("kind", "sell"));
+    return ((rows ?? []) as { realized_pnl: unknown }[]).reduce((a, r) => a + (num(r.realized_pnl) ?? 0), 0);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +500,8 @@ interface LocalData {
   snapshots: SnapshotRow[];
   alerts: AlertRow[];
   projectionRuns?: ProjectionRunSummary[];
+  holdings?: Holding[];
+  ledger?: LedgerEntry[];
 }
 
 const LOCAL_FILE = path.join(process.cwd(), ".dev-data.json");
@@ -524,6 +597,25 @@ class LocalRepo implements Repo {
     return id;
   }
   async listProjectionRuns(limit = 10) { return ((await this.load()).projectionRuns ?? []).slice(0, limit); }
+  async ledgerReady() { return true; }
+  async getHoldings(market: Market) { return ((await this.load()).holdings ?? []).filter((h) => h.market === market); }
+  async saveHolding(h: Holding) {
+    await this.mutate((d) => { d.holdings = [...(d.holdings ?? []).filter((x) => !(x.market === h.market && x.code === h.code)), h]; });
+  }
+  async getLedger(market: Market, code?: string) {
+    return ((await this.load()).ledger ?? [])
+      .filter((e) => e.market === market && (!code || e.code === code))
+      .sort((a, b) => a.trade_date.localeCompare(b.trade_date) || String(a.created_at).localeCompare(String(b.created_at)));
+  }
+  async addLedgerEntry(e: LedgerEntry) {
+    const id = `local-le-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await this.mutate((d) => { d.ledger = [...(d.ledger ?? []), { ...e, id, created_at: new Date().toISOString() }]; });
+    return id;
+  }
+  async deleteLedgerEntry(id: string) { await this.mutate((d) => { d.ledger = (d.ledger ?? []).filter((e) => e.id !== id); }); }
+  async getRealizedUsd() {
+    return (await this.load()).transactions.filter((t) => t.kind === "sell").reduce((a, t) => a + (t.realized_pnl ?? 0), 0);
+  }
 }
 
 export async function getRepo(userId: string): Promise<Repo> {

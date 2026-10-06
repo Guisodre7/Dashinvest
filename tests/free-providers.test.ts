@@ -73,3 +73,18 @@ describe("FRED (CSV público)", () => {
     expect(m?.meta?.source).toBe("fred");
   });
 });
+
+describe("brapi (B3)", async () => {
+  const { parseBrapiQuote } = await import("@/lib/market/brapi");
+  it("lê preço, variação e o horário do fornecedor; nunca marca como tempo real", () => {
+    const q = parseBrapiQuote("ITUB4", { results: [{ symbol: "ITUB4", shortName: "ITAUUNIBANCO PN", regularMarketPrice: 38.12, regularMarketChangePercent: 1.2, regularMarketTime: "2026-10-06T16:40:00.000Z" }] });
+    expect(q?.price).toBe(38.12);
+    expect(q?.change_pct).toBe(1.2);
+    expect(q?.meta.timestamp).toBe("2026-10-06T16:40:00.000Z");
+    expect(q?.meta.is_realtime).toBe(false);
+  });
+  it("erro ou resposta sem preço → null", () => {
+    expect(parseBrapiQuote("KNRI11", { error: true, message: "token required" })).toBeNull();
+    expect(parseBrapiQuote("KNRI11", { results: [{ symbol: "KNRI11" }] })).toBeNull();
+  });
+});

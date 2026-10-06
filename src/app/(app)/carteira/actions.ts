@@ -176,3 +176,40 @@ export async function setOpportunityCash(_: FormState, fd: FormData): Promise<Fo
     return "Saldo de caixa de oportunidade atualizado.";
   });
 }
+
+/**
+ * Venda (total ou parcial) na carteira internacional. Lucro realizado =
+ * valor recebido − taxas − custo proporcional (preço médio + taxas de compra).
+ * Requer a migração 0004 (coluna realized_pnl).
+ */
+export async function registerSell(_: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const user = await requireUser();
+    const repo = await getRepo(user.id);
+    if (!(await repo.ledgerReady())) throw new Error("Registro de venda indisponível: falta aplicar a migração 0004 no Supabase.");
+    const ticker = String(fd.get("ticker") ?? "").trim().toUpperCase();
+    if (!TICKER.test(ticker)) throw new Error("Ticker inválido.");
+    const qty = num(fd.get("quantity"), { required: true, min: 0 })!;
+    const price = num(fd.get("price"), { required: true, min: 0 })!;
+    const fees = num(fd.get("fees"), { min: 0 }) ?? 0;
+    const fx = num(fd.get("fx_rate"), { min: 0 });
+    const tradeDate = date(fd.get("trade_date")) ?? new Date().toISOString().slice(0, 10);
+    if (qty <= 0 || price <= 0) throw new Error("Quantidade e preço devem ser maiores que zero.");
+    const cur = (await repo.getPositions()).find((p) => p.ticker === ticker);
+    if (!cur || cur.quantity <= 0) throw new Error(`Não há posição de ${ticker} para vender.`);
+    if (qty > cur.quantity + 1e-9) throw new Error(`Venda de ${qty} maior que a posição (${cur.quantity}).`);
+
+    const frac = Math.min(1, qty / cur.quantity);
+    const costOut = frac * (cur.quantity * cur.avg_price + (cur.fees ?? 0));
+    const realized = Math.round((qty * price - fees - costOut) * 1e6) / 1e6;
+    await repo.addTransaction({
+      ticker, kind: "sell", quantity: qty, price, fees, fx_rate: fx, currency: "USD",
+      broker: str(fd.get("broker")) ?? cur.broker, trade_date: tradeDate, notes: str(fd.get("notes")), realized_pnl: realized,
+    });
+    const left = Math.round((cur.quantity - qty) * 1e8) / 1e8;
+    if (left <= 0) await repo.deletePosition(ticker);
+    else await repo.upsertPosition({ ...cur, quantity: left, fees: (cur.fees ?? 0) * (1 - frac) });
+    const sign = realized >= 0 ? "lucro" : "prejuízo";
+    return `Venda de ${qty} ${ticker} registrada: ${sign} realizado de US$ ${Math.abs(realized).toFixed(2)}.${left <= 0 ? " Posição encerrada." : ""}`;
+  });
+}

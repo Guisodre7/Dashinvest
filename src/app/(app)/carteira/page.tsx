@@ -6,7 +6,7 @@ import HistoryChart from "@/components/HistoryChart";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, tone, usd } from "@/lib/format";
-import { deletePosition, registerBuy, registerDividend, savePosition, setOpportunityCash, undoBuy } from "./actions";
+import { deletePosition, registerBuy, registerDividend, registerSell, savePosition, setOpportunityCash, undoBuy } from "./actions";
 
 const RANGES = [
   { key: "1S", days: 7 }, { key: "1M", days: 30 }, { key: "3M", days: 90 },
@@ -18,9 +18,10 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
   const repo = await getRepo(user.id);
   const { r } = await searchParams;
   const range = RANGES.find((x) => x.key === r) ?? RANGES[2];
-  const [positions, assets, transactions, dividends, snapshots, cash] = await Promise.all([
+  const [positions, assets, transactions, dividends, snapshots, cash, sellReady, realizedUsd] = await Promise.all([
     repo.getPositions(), repo.getAssets(), repo.getTransactions(50), repo.getDividends(),
     repo.getSnapshots(range.days), repo.getSetting<number>("opportunity_cash_balance"),
+    repo.ledgerReady(), repo.getRealizedUsd().catch(() => 0),
   ]);
   const tickers = assets.map((a) => a.ticker);
   const tickerOptions = tickers.map((t) => <option key={t} value={t}>{t}</option>);
@@ -107,6 +108,21 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
 
       <section className="section grid grid-2">
         <div className="card">
+          <h3>Registrar venda</h3>
+          <p className="xsmall faint" style={{ marginBottom: 8 }}>Venda total ou parcial já executada na corretora. Calcula o lucro realizado sobre o preço médio (com taxas). Lucro realizado até hoje: <strong className={`num ${tone(realizedUsd)}`}>{usd(realizedUsd)}</strong>.</p>
+          {sellReady ? (
+            <ActionForm action={registerSell} submitLabel="Registrar venda" confirm="Registrar esta venda? Nenhuma ordem é enviada à corretora.">
+              <label>Ticker<select name="ticker" required>{positions.filter((p) => p.quantity > 0).map((p) => <option key={p.ticker} value={p.ticker}>{p.ticker} ({n(p.quantity, 4)})</option>)}</select></label>
+              <label>Quantidade vendida<input name="quantity" inputMode="decimal" required /></label>
+              <label>Preço de venda (US$)<input name="price" inputMode="decimal" required /></label>
+              <label>Taxas (US$)<input name="fees" inputMode="decimal" /></label>
+              <label>Câmbio (R$/US$)<input name="fx_rate" inputMode="decimal" /></label>
+              <label>Data<input name="trade_date" type="date" /></label>
+              <label>Observação<input name="notes" /></label>
+            </ActionForm>
+          ) : <p className="small muted">Disponível após aplicar a migração 0004 no Supabase.</p>}
+        </div>
+        <div className="card">
           <h3>Registrar dividendo / distribuição</h3>
           <ActionForm action={registerDividend} submitLabel="Registrar provento">
             <label>Ticker<select name="ticker" required>{tickerOptions}</select></label>
@@ -170,10 +186,10 @@ export default async function CarteiraPage({ searchParams }: { searchParams: Pro
           <div className="section-head"><h2>Transações</h2></div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Data</th><th>Tipo</th><th>Ativo</th><th className="num">Qtd.</th><th className="num">Preço</th><th className="num">Câmbio</th></tr></thead>
+              <thead><tr><th>Data</th><th>Tipo</th><th>Ativo</th><th className="num">Qtd.</th><th className="num">Preço</th><th className="num">Câmbio</th><th className="num">Realizado</th></tr></thead>
               <tbody>{transactions.length ? transactions.map((t, i) => (
-                <tr key={t.id ?? i}><td>{dateBr(t.trade_date)}</td><td>{t.kind}</td><td>{t.ticker}</td><td className="num">{n(t.quantity, 4)}</td><td className="num">{n(t.price)}</td><td className="num">{n(t.fx_rate, 4)}</td></tr>
-              )) : <tr><td colSpan={6} className="empty">Sem transações.</td></tr>}</tbody>
+                <tr key={t.id ?? i}><td>{dateBr(t.trade_date)}</td><td>{{ buy: "Compra", sell: "Venda", deposit: "Depósito", fee: "Taxa" }[t.kind] ?? t.kind}</td><td>{t.ticker}</td><td className="num">{n(t.quantity, 4)}</td><td className="num">{n(t.price)}</td><td className="num">{n(t.fx_rate, 4)}</td><td className={`num ${tone(t.realized_pnl ?? null)}`}>{t.kind === "sell" ? n(t.realized_pnl ?? null) : ""}</td></tr>
+              )) : <tr><td colSpan={7} className="empty">Sem transações.</td></tr>}</tbody>
             </table>
           </div>
         </div>

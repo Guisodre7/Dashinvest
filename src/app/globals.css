@@ -189,6 +189,16 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--text-2); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+/* Seletor de carteira (Brasil / Internacional / Visão geral) */
+.market-switch { display: flex; gap: 4px; margin-top: 14px; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; width: fit-content; max-width: 100%; }
+.market-switch a { padding: 8px 14px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text-2); white-space: nowrap; touch-action: manipulation; }
+.market-switch a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.alloc-row { display: grid; grid-template-columns: minmax(120px, 1.2fr) 2fr minmax(90px, auto); gap: 4px 12px; align-items: center; }
+.alloc-row > .xsmall { grid-column: 1 / -1; }
+.alloc-label { display: flex; flex-direction: column; }
+.alloc-nums { text-align: right; }
+.form-grid .span-2 { grid-column: 1 / -1; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }
 
 /* Contribution */
@@ -348,6 +358,10 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
   .alloc-line { padding: 12px; }
   .alloc-amount { font-size: 16px; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .market-switch { width: 100%; }
+  .market-switch a { flex: 1; text-align: center; padding: 10px 6px; font-size: 13px; }
+  .alloc-row { grid-template-columns: 1fr auto; }
+  .alloc-row .weightbar { grid-column: 1 / -1; grid-row: 2; }
   /* Projeção: três cenários lado a lado, compactos. */
   .proj-scenarios { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px; }
   .proj-scenarios .card { padding: 10px 8px; }
