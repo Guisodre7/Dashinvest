@@ -4,6 +4,7 @@ import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import StanceCard from "@/components/StanceCard";
+import ClassRow from "@/components/ClassRow";
 import LedgerForm from "@/components/LedgerForm";
 import MovementTabs from "@/components/MovementTabs";
 import { Kpi, WeightBar } from "@/components/sections";
@@ -273,14 +274,13 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         <div>
           <div className="section-head"><h2>Estratégia Brasil</h2></div>
           <div className="card">
-            <ActionForm action={saveBrStrategy} submitLabel="Salvar estratégia">
-              <label>Renda fixa (%)<input name="renda_fixa" inputMode="decimal" defaultValue={strategy.classes.renda_fixa} required /></label>
-              <label>Ações (%)<input name="acao" inputMode="decimal" defaultValue={strategy.classes.acao} required /></label>
-              <label>FIIs (%)<input name="fii" inputMode="decimal" defaultValue={strategy.classes.fii} required /></label>
-              <label className="span-2">Ações acompanhadas<input name="acoes" defaultValue={strategy.assets.filter((a) => a.asset_class === "acao").map((a) => a.code).join(", ")} /></label>
-              <label className="span-2">FIIs acompanhados<input name="fiis" defaultValue={strategy.assets.filter((a) => a.asset_class === "fii").map((a) => a.code).join(", ")} /></label>
+            <ActionForm action={saveBrStrategy} submitLabel="Salvar estratégia" className="stack">
+              <div className="class-head"><span>Classe</span><span>Meta</span><span>Ativos</span></div>
+              <ClassRow name="Renda fixa" pctField="renda_fixa" pct={strategy.classes.renda_fixa} listHint="títulos e fundos registrados em Movimentar" />
+              <ClassRow name="Ações" pctField="acao" pct={strategy.classes.acao} listField="acoes" list={strategy.assets.filter((a) => a.asset_class === "acao").map((a) => a.code).join(", ")} />
+              <ClassRow name="FIIs" pctField="fii" pct={strategy.classes.fii} listField="fiis" list={strategy.assets.filter((a) => a.asset_class === "fii").map((a) => a.code).join(", ")} />
             </ActionForm>
-            <p className="xsmall faint" style={{ marginTop: 6 }}>Separe os tickers por vírgula. A soma das classes deve ser 100%.</p>
+            <p className="xsmall faint" style={{ marginTop: 6 }}>Para adicionar um ativo, escreva o ticker na classe (separe por vírgula); para tirar, apague. A soma das classes deve ser 100%; a meta de cada ativo é a da classe dividida pelo nº de ativos.</p>
           </div>
         </div>
       </section>

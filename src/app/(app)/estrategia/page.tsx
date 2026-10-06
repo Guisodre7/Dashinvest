@@ -1,10 +1,11 @@
 import ActionForm from "@/components/ActionForm";
 import { FACTOR_KEYS, FACTOR_LABELS } from "@/lib/analysis/settings";
 import { requireUser } from "@/lib/auth";
-import { loadSettings } from "@/lib/data/load";
 import { getRepo } from "@/lib/db/repo";
-import { n } from "@/lib/format";
-import { addAsset, saveEngineSettings, saveStrategy } from "./actions";
+import { n, pct, tone, usd } from "@/lib/format";
+import { saveEngineSettings, saveStrategy, saveStrategyClasses } from "./actions";
+import ClassRow from "@/components/ClassRow";
+import { loadContext, loadSettings } from "@/lib/data/load";
 
 export default async function EstrategiaPage() {
   const user = await requireUser();
@@ -14,14 +15,57 @@ export default async function EstrategiaPage() {
   ]);
   const sum = strategy.filter((s) => s.enabled && !s.is_legacy).reduce((a, s) => a + s.target_weight, 0);
   const names = new Map(assets.map((a) => [a.ticker, a.name]));
+  const ctx = await loadContext(user);
+  // Classes = buckets da estratégia (ordem pela prioridade); legado em linha própria.
+  const active = strategy.filter((s) => s.enabled && !s.is_legacy);
+  const buckets = [...new Set(active.sort((a, b) => a.priority - b.priority).map((s) => s.strategy_bucket))];
+  const classRows = buckets.map((b) => {
+    const list = active.filter((s) => s.strategy_bucket === b);
+    return { name: b, pct: Math.round(list.reduce((a, s) => a + s.target_weight, 0) * 100) / 100, tickers: list.map((s) => s.ticker).join(", ") };
+  });
+  const rows = [...classRows, { name: "", pct: 0, tickers: "" }, { name: "", pct: 0, tickers: "" }];
+  const legacy = strategy.filter((s) => s.is_legacy).map((s) => s.ticker).join(", ");
+  const held = new Set(ctx.portfolio.positions.filter((p) => p.quantity > 0).map((p) => p.ticker));
+  const watch = active.filter((s) => !held.has(s.ticker));
 
   return (
     <div className="stack" style={{ gap: 0 }}>
-      <section className="hero"><div><h1>Estratégia</h1><p className="muted small">Pesos-alvo e regras do motor de alocação. Nada aqui está fixo no código do frontend.</p></div></section>
+      <section className="hero"><div><div className="hero-title">🇺🇸 Carteira Internacional</div><h1>Estratégia</h1></div></section>
 
+      <section className="section grid grid-2">
+        <div>
+          <div className="section-head"><h2>Acompanhamento</h2><span className="xsmall faint">ativos da estratégia sem posição</span></div>
+          <div className="card stack small">
+            {watch.length === 0 ? <span className="faint">Todos os ativos da estratégia já estão na carteira.</span> : watch.map((s) => {
+              const q = ctx.quotes[s.ticker];
+              return (
+                <div key={s.ticker} className="row-between">
+                  <span><strong>{s.ticker}</strong> <span className="faint xsmall">{names.get(s.ticker) ?? ""} · {s.strategy_bucket}</span></span>
+                  <span className="num">{q?.price != null ? <>{usd(q.price)} <span className={`xsmall ${tone(q.change_pct)}`}>{pct(q.change_pct, 2, true)}</span></> : <span className="xsmall faint">sem cotação</span>}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="section-head"><h2>Estratégia Internacional</h2></div>
+          <div className="card">
+            <ActionForm action={saveStrategyClasses} submitLabel="Salvar estratégia" className="stack">
+              <input type="hidden" name="rows" value={rows.length} />
+              <div className="class-head"><span>Classe</span><span>Meta</span><span>Ativos</span></div>
+              {rows.map((r, i) => <ClassRow key={i} name={r.name} nameField={`cls_name_${i}`} pctField={`cls_pct_${i}`} pct={r.pct || null} listField={`cls_tickers_${i}`} list={r.tickers} />)}
+              <ClassRow name="Legado (fora dos aportes)" listField="legacy" list={legacy} />
+            </ActionForm>
+            <p className="xsmall faint" style={{ marginTop: 6 }}>Para adicionar um ativo, escreva o ticker na classe (ex.: NU em CRESCIMENTO) — ele é conferido na NYSE/Nasdaq e cadastrado. Para tirar, apague. Use as linhas vazias para criar uma classe. A soma das classes deve ser 100%; a meta de cada ativo é a da classe dividida pelo nº de ativos. Legado é monitorado, não recebe aportes e nunca tem venda sugerida.</p>
+          </div>
+        </div>
+      </section>
+
+      <details className="section">
+        <summary className="muted small" style={{ cursor: "pointer" }}>Ajuste fino por ativo (peso, mínimo, máximo, prioridade)</summary>
       <section className="section">
         <div className="section-head"><h2>Carteira estratégica</h2><span className={`small ${Math.abs(sum - 100) > 0.05 ? "neg" : "muted"}`}>Soma dos pesos ativos: {n(sum, 2)}%</span></div>
-        <ActionForm action={saveStrategy} submitLabel="Salvar estratégia" className="stack">
+        <ActionForm action={saveStrategy} submitLabel="Salvar ajuste fino" className="stack">
           <input type="hidden" name="tickers" value={strategy.map((s) => s.ticker).join(",")} />
           <div className="table-wrap">
             <table>
@@ -47,16 +91,10 @@ export default async function EstrategiaPage() {
         </ActionForm>
       </section>
 
-      <section className="section card">
-        <h3>Adicionar ativo</h3>
-        <ActionForm action={addAsset} submitLabel="Adicionar">
-          <label>Ticker<input name="ticker" required placeholder="ex.: AMZN" /></label>
-          <label>Nome<input name="name" /></label>
-          <label>Tipo<select name="asset_type"><option value="stock">Ação</option><option value="etf">ETF</option></select></label>
-          <label>Bucket<input name="bucket" placeholder="CRESCIMENTO" /></label>
-        </ActionForm>
-      </section>
+      </details>
 
+      <details className="section">
+        <summary className="muted small" style={{ cursor: "pointer" }}>Regras do motor de alocação e pesos do Opportunity Score</summary>
       <section className="section">
         <div className="section-head"><h2>Motor de alocação</h2></div>
         <ActionForm action={saveEngineSettings} submitLabel="Salvar configurações" className="stack">
@@ -83,6 +121,7 @@ export default async function EstrategiaPage() {
           </div>
         </ActionForm>
       </section>
+      </details>
     </div>
   );
 }

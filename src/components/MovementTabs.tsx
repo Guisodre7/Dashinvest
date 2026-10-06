@@ -6,7 +6,7 @@ export default function MovementTabs({ panels, initial }: { panels: { key: strin
   const [cur, setCur] = useState(initial ?? panels[0]?.key);
   return (
     <div className="card stack">
-      <div className="tabs" role="tablist">
+      <div className="seg" role="tablist">
         {panels.map((p) => (
           <button key={p.key} type="button" role="tab" aria-selected={cur === p.key} className={`tab-btn${cur === p.key ? " on" : ""}`} onClick={() => setCur(p.key)}>{p.label}</button>
         ))}

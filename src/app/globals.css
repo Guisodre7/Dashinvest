@@ -199,6 +199,13 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 .verdict-nao_aumentar { border-left: 4px solid var(--neg); }
 .verdict-sem_dados { border-left: 4px solid var(--border); }
 
+/* Estratégia por classes (Brasil e Internacional) */
+.class-head, .class-row { display: grid; grid-template-columns: minmax(120px, 1.1fr) 90px 2.4fr; gap: 8px; align-items: center; }
+.class-head { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+.class-row + .class-row { margin-top: 8px; }
+.class-row .pct { display: flex; align-items: center; gap: 4px; }
+.class-row .pct input { width: 100%; text-align: right; }
+
 /* Painel compacto */
 .dash-head { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; margin-top: 14px; }
 .dash-hero .hero-value { font-size: 34px; line-height: 1.1; }
@@ -251,6 +258,10 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 .notif-item.unread { border-left: 3px solid var(--accent, #1f3a5f); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .tabs a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+.seg { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.seg .tab-btn { flex: none; white-space: nowrap; }
+.seg .tab-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
+input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; text-align: left; }
 .tab-btn { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: none; font: inherit; font-size: 13px; color: var(--text-2); cursor: pointer; touch-action: manipulation; }
 .tab-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .tabs a[aria-current="page"] { background: var(--text); color: var(--surface); border-color: var(--text); }
@@ -403,6 +414,8 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 
   /* Campos com 16px evitam o zoom automático do iOS; alvos de toque maiores. */
   input, select, textarea { font-size: 16px; }
+  /* iPhone: data/hora com a mesma altura dos outros campos (sem desalinhar a linha). */
+  input[type="date"], input[type="time"] { height: 42px; box-sizing: border-box; }
   .btn { min-height: 40px; }
   .btn-sm { min-height: 34px; }
   .contrib { flex-direction: column; }
@@ -435,6 +448,9 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
   .dash-fresh { max-width: none; }
   .dash-tabs { top: 0; }
   .subnav { top: 0; }
+  .class-head { display: none; }
+  .class-row { grid-template-columns: 1fr 90px; }
+  .class-row > :last-child { grid-column: 1 / -1; }
   .compact-list .m-row-mid, .compact-list .m-row-sub.xsmall { display: none; }
   .compact-list .m-row { padding: 10px 12px; }
   .bell-pop { position: fixed; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 60px); width: auto; }

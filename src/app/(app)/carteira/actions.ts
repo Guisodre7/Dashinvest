@@ -2,28 +2,9 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { invalidateUserContext } from "@/lib/data/load";
-import { getRepo, type Repo } from "@/lib/db/repo";
-import { getMarketDataProvider } from "@/lib/market";
-import { ASSET_META } from "@/lib/portfolio/defaults";
+import { getRepo } from "@/lib/db/repo";
+import { ensureUsAsset } from "@/lib/data/usAssets";
 
-const KNOWN_ETFS = new Set(["VOO", "VTI", "SPY", "QQQ", "IVV", "JEPQ", "JEPI", "SCHD", "LQD", "VNQ", "BND", "AGG", "TLT", "IEF", "VXUS", "VEA", "VWO", "DIA", "UUP", "GLD", "XLK", "SMH"]);
-
-/**
- * Ativo novo (ex.: NU): confere na bolsa pelo fornecedor de cotações e cadastra
- * automaticamente — não é preciso ir antes em Estratégia.
- */
-async function ensureUsAsset(repo: Repo, ticker: string): Promise<void> {
-  if ((await repo.getAssets()).some((a) => a.ticker === ticker)) return;
-  let name: string | null = null;
-  try {
-    const q = await getMarketDataProvider().getQuote(ticker);
-    if (!q.price) throw new Error("sem preço");
-    name = q.name;
-  } catch {
-    throw new Error(`Não encontrei ${ticker} na NYSE/Nasdaq pelo fornecedor de cotações. Confira o ticker (ex.: NU, BRK.B).`);
-  }
-  await repo.upsertAsset({ ticker, name: name ?? ASSET_META[ticker]?.name ?? ticker, asset_type: KNOWN_ETFS.has(ticker) ? "etf" : "stock" });
-}
 import type { PositionRow } from "@/lib/portfolio/calc";
 
 const TICKER = /^[A-Z.]{1,10}$/;
