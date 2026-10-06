@@ -60,13 +60,21 @@ export const DEFAULT_TAX: Record<"US" | "BR_ACAO" | "BR_FII", TaxRules> = {
   BR_FII: { feePerOrder: 0, gainTaxRate: 0.2, monthlyExemption: null, minTicket: 500, note: "FIIs: 20% sobre o ganho de capital, sem isenção. Confirme a regra vigente." },
 };
 
+export type FairBasis = "fair-value" | "historical-multiple" | "graham-bazin" | "patrimonial";
+const BASIS_LABEL: Record<FairBasis, string> = {
+  "fair-value": "faixa multi-fonte",
+  "historical-multiple": "múltiplo histórico, confiança menor",
+  "graham-bazin": "média de Graham e Bazin",
+  patrimonial: "valor patrimonial por cota (P/VP = 1)",
+};
+
 export interface StanceInput {
   ticker: string;
   isEtf: boolean;
   isLegacy: boolean;
   price: number | null;
   /** Valor justo estimado (intervalo) — de fair value multi-fonte ou múltiplo histórico. */
-  fair: { low: number | null; mean: number; high: number | null; basis: "fair-value" | "historical-multiple" } | null;
+  fair: { low: number | null; mean: number; high: number | null; basis: FairBasis } | null;
   qualityScore: number | null;
   qualityCoverage: number;
   /** Sinais do motor de análise (THESIS_CHANGE, ...). */
@@ -154,7 +162,7 @@ export function computeStance(i: StanceInput): Stance {
   const bands = valuationBands(i.fair.mean);
   const band = bandOf(i.price, i.fair.mean);
   const premiumPct = (i.price / i.fair.mean - 1) * 100;
-  reasons.push(`Preço ${fmt(Math.abs(premiumPct), 1)}% ${premiumPct >= 0 ? "acima" : "abaixo"} do valor justo médio estimado (${i.fair.basis === "fair-value" ? "faixa multi-fonte" : "múltiplo histórico, confiança menor"}).`);
+  reasons.push(`Preço ${fmt(Math.abs(premiumPct), 1)}% ${premiumPct >= 0 ? "acima" : "abaixo"} do valor justo médio estimado (${BASIS_LABEL[i.fair.basis]}).`);
 
   // Alta: acompanhada pelos fundamentos ou só expectativa?
   let rally: Stance["rally"] = null;
@@ -242,7 +250,9 @@ export function computeStance(i: StanceInput): Stance {
   }
 
   if (quality !== "sem dados") reasons.push(`Qualidade do negócio: ${quality}.`);
-  reasons.push(`Tese: ${thesis}.`);
+  reasons.push(thesis === "não verificável"
+    ? "Tese: não verificável automaticamente (sem estimativas de lucro na fonte gratuita) — confira resultados e notícias antes de decidir."
+    : `Tese: ${thesis}.`);
   if (i.weight !== null) reasons.push(`Peso atual ${fmt(i.weight, 1)}% · meta ${fmt(i.target, 1)}%${i.maxWeight !== null ? ` · máximo ${fmt(i.maxWeight, 1)}%` : ""}.`);
   return { ...base, bands, band, premiumPct, action, headline, reasons, rally, realization, rebuy };
 }

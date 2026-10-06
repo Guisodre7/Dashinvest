@@ -3,6 +3,7 @@ import webpush from "web-push";
 import type { SessionUser } from "../auth";
 import { serverConfig } from "../config";
 import { loadBrazil } from "../data/brazil";
+import { loadBrStances } from "../data/brStances";
 import { loadContext } from "../data/load";
 import type { NotificationRow, Repo } from "../db/repo";
 import { parseTaxSettings, usStances } from "../analysis/stanceInput";
@@ -110,8 +111,10 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   const stances = usStances(ctx.analyses, ctx.portfolio, transactions, parseTaxSettings(rawTax), now);
   const prices = Object.fromEntries(ctx.analyses.map((a) => [a.ticker, a.price]));
   await recordStanceHistory(repo, stances, prices, now).catch(() => undefined);
+  const brs = await loadBrStances(br, repo).catch(() => ({ views: [], errors: {} }));
   const candidates: Candidate[] = [
-    ...usCandidates(ctx.analyses, now), ...stanceCandidates(stances), ...ladderCandidates(ladders ?? {}, prices, {
+    ...usCandidates(ctx.analyses, now), ...stanceCandidates(stances, { market: "US" }),
+    ...stanceCandidates(brs.views.map((v) => v.stance), { market: "BR", currency: "R$", url: (t) => `/brasil?aba=valuation#br-${t}`, opportunities: true }), ...ladderCandidates(ladders ?? {}, prices, {
       held: (t) => (ctx.portfolio.positions.find((x) => x.ticker === t)?.quantity ?? 0) > 0,
       lastSellDate: (t) => transactions.filter((x) => x.kind === "sell" && x.ticker === t).map((x) => x.trade_date).sort().pop() ?? null,
     }),

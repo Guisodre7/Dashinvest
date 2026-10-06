@@ -83,6 +83,19 @@ Princípio: separar **qualidade do ativo**, **valor (faixa de valuation)** e **p
 - **O que mudou?**: retrato diário de cada ativo em `app_settings.stance_history` (gravado pelo monitor). A comparação de 7/30/90 dias explica se mudou o preço, o valuation ou a tese.
 - **Lucro de verdade × no papel**: lucro realizado (vendas) separado do não realizado, do custo histórico e do valor da posição.
 
+## Carteira Brasil — fundamentos e valuation (passo 4)
+
+- **Fundamentos B3**: Fundamentus (página pública, gratuita, sem chave; `src/lib/market/brFundamentals.ts`), 24h de cache.
+  - Ações: P/L, P/VP, LPA, VPA, DY, ROE, ROIC, margens, dívida, crescimento.
+  - FIIs: P/VP, VP/cota, DY, vacância, imóveis, cap rate.
+  - Cotações seguem pela brapi.
+- **Valuation** (`src/lib/analysis/brValuation.ts`):
+  - ações: Graham (√(22,5 × LPA × VPA)) + Bazin (dividendos 12m ÷ 6%). Exige os dois métodos e não exibe faixa se divergirem mais de 80%;
+  - FIIs: VP/cota (P/VP = 1).
+- **Qualidade**: ROE, ROIC, margem, dívida, crescimento (ações); vacância e diversificação (FIIs).
+- **Postura**: mesmo motor da carteira internacional; meta por ativo = meta da classe ÷ nº de ativos; impostos de ações BR/FIIs. Tese "não verificável" (sem estimativas de lucro na fonte gratuita) é dita explicitamente.
+- **Telas e alertas**: aba Valuation em `/brasil` e cards em `/oportunidades`; notificações de oportunidade, realização e recompra também para a B3.
+
 ## Notificações no iPhone (Web Push, gratuito)
 
 "Monitorar muito, notificar pouco, explicar bem." Preço subindo ou caindo sozinho nunca gera push.

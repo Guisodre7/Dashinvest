@@ -27,7 +27,7 @@ function checkBlocked(provider: string, endpoint: string) {
   }
 }
 
-type GetOpts = { revalidate: number; ticker?: string; timeoutMs?: number; headers?: Record<string, string> };
+type GetOpts = { revalidate: number; ticker?: string; timeoutMs?: number; headers?: Record<string, string>; encoding?: string };
 
 /**
  * GET JSON server-side com cache do Next (revalidate em segundos; 0 = sem cache).
@@ -39,7 +39,8 @@ export async function getJson<T>(provider: string, endpoint: string, url: string
 
 /** GET de texto (CSV etc.), com as mesmas regras de getJson. */
 export async function getText(provider: string, endpoint: string, url: string, opts: GetOpts): Promise<string> {
-  return request(provider, endpoint, url, opts, (res) => res.text());
+  // Páginas antigas (ex.: ISO-8859-1) precisam de decodificação explícita.
+  return request(provider, endpoint, url, opts, async (res) => (opts.encoding ? new TextDecoder(opts.encoding).decode(await res.arrayBuffer()) : res.text()));
 }
 
 async function request<T>(provider: string, endpoint: string, url: string, opts: GetOpts, read: (res: Response) => Promise<T>): Promise<T> {

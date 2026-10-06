@@ -29,16 +29,16 @@ export function BandBar({ s, price, cur }: { s: Stance; price: number | null; cu
   );
 }
 
-export default function StanceCard({ s, price, cur = "US$", name, compact = false, position }: {
-  s: Stance; price: number | null; cur?: string; name?: string; compact?: boolean;
+export default function StanceCard({ s, price, cur = "US$", name, compact = false, position, href, children }: {
+  s: Stance; price: number | null; cur?: string; name?: string; compact?: boolean; href?: string; children?: React.ReactNode;
   position?: { quantity: number; avgCost: number; value: number | null; realized: number } | null;
 }) {
   const meta = ACTION_META[s.action];
   return (
-    <div className="card stack stance" id={compact ? undefined : "realizacao"}>
+    <div className="card stack stance" id={compact ? (href?.includes("#") ? href.split("#")[1] : undefined) : "realizacao"}>
       <div className="row-between">
         <div>
-          <strong>{compact ? <Link href={`/ativo/${encodeURIComponent(s.ticker)}#realizacao`}>{s.ticker}</Link> : "Valuation e decisão"}</strong>
+          <strong>{compact ? <Link href={href ?? `/ativo/${encodeURIComponent(s.ticker)}#realizacao`}>{s.ticker}</Link> : "Valuation e decisão"}</strong>
           {name && <span className="xsmall faint"> · {name}</span>}
         </div>
         <span className={`badge action-${meta.group}`}>{meta.emoji} {meta.label}</span>
@@ -51,6 +51,7 @@ export default function StanceCard({ s, price, cur = "US$", name, compact = fals
       </div>
       <p className="small">{s.headline}</p>
       <BandBar s={s} price={price} cur={cur} />
+      {children}
       {!compact && <ul className="clean xsmall muted">{s.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
 
       {!compact && position && position.quantity > 0 && (

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
+import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import StanceCard from "@/components/StanceCard";
 import { requireUser } from "@/lib/auth";
 import { ACTION_META, type Stance } from "@/lib/analysis/stance";
 import { loadBrazil } from "@/lib/data/brazil";
+import { loadBrStances } from "@/lib/data/brStances";
 import { loadContext } from "@/lib/data/load";
 import { loadStances } from "@/lib/data/stances";
 import { saveTaxRules } from "./actions";
@@ -21,10 +23,10 @@ export default async function OportunidadesPage() {
   const user = await requireUser();
   const ctx = await loadContext(user);
   const [{ stances, tax }, br] = await Promise.all([loadStances(ctx, ctx.repo), loadBrazil(ctx.repo)]);
+  const brs = await loadBrStances(br, ctx.repo);
   const byGroup = (g: string) => stances.filter((s) => ACTION_META[s.action].group === g);
   const name = (t: string) => ctx.analyses.find((a) => a.ticker === t)?.name;
   const price = (t: string) => ctx.analyses.find((a) => a.ticker === t)?.price ?? null;
-  const brAssets = br.strategy.assets.filter((a) => a.enabled);
   const pct = (v: number) => String(Math.round(v * 1000) / 10);
 
   return (
@@ -39,25 +41,24 @@ export default async function OportunidadesPage() {
 
       {GROUPS.map((g) => {
         const list: Stance[] = byGroup(g.key);
-        if (!list.length && (g.key === "manter" || g.key === "aguardar")) return null;
+        const brList = brs.views.filter((v) => ACTION_META[v.stance.action].group === g.key);
+        if (!list.length && !brList.length && (g.key === "manter" || g.key === "aguardar")) return null;
         return (
           <section key={g.key} className="section">
-            <div className="section-head"><h2>{g.title}</h2><span className="xsmall faint">{list.length} ativo(s)</span></div>
-            {list.length === 0 ? <p className="small faint">{g.empty}</p> : (
-              <div className="grid grid-2">{list.map((s) => <StanceCard key={s.ticker} s={s} price={price(s.ticker)} name={name(s.ticker)} compact />)}</div>
+            <div className="section-head"><h2>{g.title}</h2><span className="xsmall faint">{list.length + brList.length} ativo(s)</span></div>
+            {list.length + brList.length === 0 ? <p className="small faint">{g.empty}</p> : (
+              <div className="grid grid-2">
+                {list.map((s) => <StanceCard key={s.ticker} s={s} price={price(s.ticker)} name={`🇺🇸 ${name(s.ticker) ?? ""}`} compact />)}
+                {brList.map((v) => (
+                  <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={`🇧🇷 ${v.name ?? ""}`} compact href={`/brasil#br-${v.code}`}>
+                    <BrFundamentalsLine v={v} error={brs.errors[v.code]} />
+                  </StanceCard>
+                ))}
+              </div>
             )}
           </section>
         );
       })}
-
-      <section className="section">
-        <div className="section-head"><h2>🇧🇷 Carteira Brasil</h2></div>
-        <div className="card small stack">
-          <p>⚪ <strong>Aguardar dados</strong> — {brAssets.map((a) => a.code).join(", ")}.</p>
-          <p className="muted">A fonte gratuita da B3 (brapi) entrega cotações, mas não os fundamentos (P/L, P/VP, ROE, lucro, histórico de dividendos) necessários para faixas de valuation confiáveis. Sem esses dados, o sistema não classifica — não inventa. Próximo passo possível: P/VP e dividendos de FIIs por outra fonte gratuita, ou preenchimento manual.</p>
-          <Link href="/brasil" className="small">Ver Carteira Brasil →</Link>
-        </div>
-      </section>
 
       <section className="section grid grid-2">
         <div>

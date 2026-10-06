@@ -1,19 +1,33 @@
+import Link from "next/link";
 import ActionForm from "@/components/ActionForm";
+import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
+import StanceCard from "@/components/StanceCard";
 import LedgerForm from "@/components/LedgerForm";
 import { Kpi, WeightBar } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
+import { loadBrStances } from "@/lib/data/brStances";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, pp, tone } from "@/lib/format";
 import { humanAge } from "@/lib/market/freshness";
 import { CLASS_LABEL, KIND_LABEL, PRICED } from "@/lib/portfolio/ledger";
 import { registerEntry, saveBrStrategy, undoEntry } from "./actions";
 
-export default async function BrasilPage() {
+const BR_TABS = [
+  { key: "resumo", label: "Resumo" }, { key: "valuation", label: "Valuation" },
+  { key: "movimentar", label: "Movimentar" }, { key: "estrategia", label: "Estratégia" },
+] as const;
+type BrTab = (typeof BR_TABS)[number]["key"];
+
+export default async function BrasilPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
+  const { aba } = await searchParams;
+  const tab: BrTab = BR_TABS.some((t) => t.key === aba) ? (aba as BrTab) : "resumo";
   const user = await requireUser();
   const repo = await getRepo(user.id);
   const br = await loadBrazil(repo);
+  // Fundamentos só quando a aba de valuation é aberta (mais rápido no resto).
+  const brs = tab === "valuation" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
   const { summary: s, strategy, quotes } = br;
   const month = new Date().toISOString().slice(0, 7);
   const monthIn = br.entries.filter((e) => e.trade_date.startsWith(month) && (e.kind === "buy" || e.kind === "contribution")).reduce((a, e) => a + e.amount + e.fees, 0);
@@ -53,7 +67,13 @@ export default async function BrasilPage() {
         </div>
       </section>
 
-      <section className="section grid grid-4">
+      <nav className="tabs dash-tabs" aria-label="Seções da carteira Brasil">
+        {BR_TABS.map((t) => <Link key={t.key} href={t.key === "resumo" ? "/brasil" : `/brasil?aba=${t.key}`} scroll={false} aria-current={tab === t.key ? "page" : undefined}>{t.label}</Link>)}
+      </nav>
+
+      {tab === "resumo" && (
+        <>
+      <section className="section grid grid-4 kpis-compact">
         <Kpi label="Dinheiro que eu coloquei" value={brl(s.contributed)} sub={`voltou ${brl(s.withdrawn)} em vendas/resgates`} />
         <Kpi label="Valorização (não realizada)" value={brl(s.unrealized)} cls={tone(s.unrealized)} sub="valor atual − custo" />
         <Kpi label="Lucro realizado" value={brl(s.realized)} cls={tone(s.realized)} sub="vendas e resgates" />
@@ -84,6 +104,27 @@ export default async function BrasilPage() {
         </div>
       </section>
 
+        </>
+      )}
+
+      {tab === "valuation" && (
+        <>
+      <section className="section">
+        <div className="section-head"><h2>Valuation dos ativos</h2><span className="xsmall faint">qualidade · faixa de valuation · peso na carteira — não é ordem</span></div>
+        <div className="grid grid-2">
+          {brs.views.map((v) => (
+            <StanceCard key={v.code} s={v.stance} price={v.price} cur="R$" name={v.name ?? undefined} compact href={`/brasil#br-${v.code}`}>
+              <BrFundamentalsLine v={v} error={brs.errors[v.code]} />
+            </StanceCard>
+          ))}
+        </div>
+      </section>
+
+        </>
+      )}
+
+      {tab === "resumo" && (
+        <>
       <section className="section">
         <div className="section-head"><h2>Posições</h2></div>
         {s.holdings.length === 0 ? <p className="small faint">Nenhuma posição registrada.</p> : (
@@ -117,6 +158,11 @@ export default async function BrasilPage() {
         )}
       </section>
 
+        </>
+      )}
+
+      {tab === "movimentar" && (
+        <>
       {br.ready && (
         <section className="section">
           <div className="section-head"><h2>Adicionar atualização da carteira</h2><span className="xsmall faint">print de fundo / renda fixa → confere → você confirma</span></div>
@@ -158,6 +204,11 @@ export default async function BrasilPage() {
         </section>
       )}
 
+        </>
+      )}
+
+      {tab === "estrategia" && (
+        <>
       <section className="section grid grid-2">
         <div>
           <div className="section-head"><h2>Acompanhamento</h2><span className="xsmall faint">ativos da estratégia sem posição</span></div>
@@ -187,6 +238,8 @@ export default async function BrasilPage() {
           </div>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 }

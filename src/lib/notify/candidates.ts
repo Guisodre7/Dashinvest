@@ -152,30 +152,43 @@ export const TEST_CANDIDATE: Candidate = {
   title: "🔔 DashInvest conectado", body: "As notificações estão funcionando corretamente.", reason: "Teste manual",
 };
 
-const money = (v: number) => `US$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v: number, cur = "US$") => `${cur} ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Postura de valuation: realização parcial / redução / recompra. */
-export function stanceCandidates(stances: Stance[]): Candidate[] {
+/** Postura de valuation: realização parcial / redução / recompra (e oportunidade, na carteira Brasil). */
+export function stanceCandidates(stances: Stance[], opts: { market: "US" | "BR"; currency?: string; url?: (t: string) => string; opportunities?: boolean } = { market: "US" }): Candidate[] {
   const out: Candidate[] = [];
+  const cur = opts.currency ?? "US$";
+  const money_ = (v: number) => money(v, cur);
   for (const s of stances) {
-    const url = `/ativo/${encodeURIComponent(s.ticker)}#realizacao`;
+    const url = opts.url ? opts.url(s.ticker) : `/ativo/${encodeURIComponent(s.ticker)}#realizacao`;
+    const market = opts.market;
     if ((s.action === "realizacao" || s.action === "reduzir") && s.realization) {
       const r = s.realization;
       out.push({
-        category: "realization", priority: "high", market: "US", ticker: s.ticker, url, key: `${s.ticker}:realization:${s.action}`,
+        category: "realization", priority: "high", market, ticker: s.ticker, url, key: `${s.ticker}:realization:${s.action}`,
         title: s.action === "reduzir" ? `Avaliar redução: ${s.ticker}` : `Valuation esticado: ${s.ticker}`,
-        body: `${s.headline} Faixa sugerida para avaliação: ${r.pctLow}%–${r.pctHigh}% da posição (${money(r.valueLow)}–${money(r.valueHigh)}). Imposto estimado ${money(r.estTax)}. Não é ordem.`,
+        body: `${s.headline} Faixa sugerida para avaliação: ${r.pctLow}%–${r.pctHigh}% da posição (${money_(r.valueLow)}–${money_(r.valueHigh)}). Imposto estimado ${money_(r.estTax)}. Não é ordem.`,
         publicBody: `${s.ticker} continua com fundamentos ${s.quality === "excelente" || s.quality === "boa" ? "sólidos" : "a acompanhar"}, mas o valuation entrou em faixa esticada. Avaliar realização parcial.`,
         reason: `Postura ${s.action} · faixa ${s.band} · qualidade ${s.quality} · tese ${s.thesis}`,
       });
     }
     if (s.action === "recompra" && s.rebuy) {
       out.push({
-        category: "rebuy", priority: "high", market: "US", ticker: s.ticker, url, key: `${s.ticker}:rebuy`,
+        category: "rebuy", priority: "high", market, ticker: s.ticker, url, key: `${s.ticker}:rebuy`,
         title: `Possível recompra: ${s.ticker}`,
-        body: `${s.ticker} retornou à faixa de valuation considerada interessante. Fundamentos permanecem preservados. Venda anterior a ${money(s.rebuy.sellPrice)}; preço ${s.rebuy.dropFromSellPct.toFixed(1).replace(".", ",")}% em relação à venda. Recompra em degraus.`,
+        body: `${s.ticker} retornou à faixa de valuation considerada interessante. Fundamentos permanecem preservados. Venda anterior a ${money_(s.rebuy.sellPrice)}; preço ${s.rebuy.dropFromSellPct.toFixed(1).replace(".", ",")}% em relação à venda. Recompra em degraus.`,
         publicBody: `${s.ticker} retornou à faixa de valuation considerada interessante. Fundamentos permanecem preservados.`,
         reason: `Postura recompra · faixa ${s.band} · tese ${s.thesis}`,
+      });
+    }
+    // Na carteira Brasil os sinais de oportunidade vêm daqui (não há motor de sinais EUA para B3).
+    if (opts.opportunities && s.action === "comprar" && (s.band === "forte" || s.band === "atrativo")) {
+      out.push({
+        category: "opportunity", priority: s.thesis === "não verificável" ? "medium" : "high", market, ticker: s.ticker, url, key: `${s.ticker}:opportunity`,
+        title: `Oportunidade: ${s.ticker}`,
+        body: `${s.ticker} entrou na faixa de valuation considerada atrativa. ${s.headline}${s.thesis === "não verificável" ? " A tese não pôde ser verificada automaticamente." : ""} Fundamentos recalculados — entrou em faixa de análise, não é ordem de compra.`,
+        publicBody: `${s.ticker} entrou na faixa de valuation considerada atrativa. Toque para ver a análise.`,
+        reason: `Faixa ${s.band} · qualidade ${s.quality}`,
       });
     }
   }
