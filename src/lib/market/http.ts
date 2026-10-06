@@ -27,16 +27,22 @@ function checkBlocked(provider: string, endpoint: string) {
   }
 }
 
+type GetOpts = { revalidate: number; ticker?: string; timeoutMs?: number };
+
 /**
  * GET JSON server-side com cache do Next (revalidate em segundos; 0 = sem cache).
  * Só erros são registrados em api_logs. A URL pode conter a API key — nunca é logada.
  */
-export async function getJson<T>(
-  provider: string,
-  endpoint: string,
-  url: string,
-  opts: { revalidate: number; ticker?: string; timeoutMs?: number },
-): Promise<T> {
+export async function getJson<T>(provider: string, endpoint: string, url: string, opts: GetOpts): Promise<T> {
+  return request(provider, endpoint, url, opts, (res) => res.json() as Promise<T>);
+}
+
+/** GET de texto (CSV etc.), com as mesmas regras de getJson. */
+export async function getText(provider: string, endpoint: string, url: string, opts: GetOpts): Promise<string> {
+  return request(provider, endpoint, url, opts, (res) => res.text());
+}
+
+async function request<T>(provider: string, endpoint: string, url: string, opts: GetOpts, read: (res: Response) => Promise<T>): Promise<T> {
   checkBlocked(provider, endpoint);
   const started = Date.now();
   const controller = new AbortController();
@@ -56,7 +62,7 @@ export async function getJson<T>(
       logApiCall({ provider, endpoint, ticker: opts.ticker, status: res.status, latency_ms: latency, error: res.statusText });
       throw new HttpError(res.status, `${provider} ${endpoint}: HTTP ${res.status}`);
     }
-    return (await res.json()) as T;
+    return await read(res);
   } catch (err) {
     if (!(err instanceof HttpError)) {
       logApiCall({

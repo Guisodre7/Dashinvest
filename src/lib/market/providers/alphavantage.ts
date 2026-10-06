@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { buildMeta } from "../freshness";
 import { blockEndpoint, getJson, toNum } from "../http";
 import { statusAt } from "../marketStatus";
@@ -19,34 +20,49 @@ const symbol = (t: string) => t.toUpperCase().replace(".", "-");
 type AvBody = Record<string, unknown> & { Note?: string; Information?: string; "Error Message"?: string };
 
 /**
- * Alpha Vantage — histórico diário, fundamentos (OVERVIEW), estimativas com
- * histórico de revisões (EARNINGS_ESTIMATES), notícias com sentimento,
- * dividendos, perfil de ETFs, câmbio e juros.
- * No plano gratuito as cotações são atrasadas; `realtime` só deve ser true
- * quando o plano contratado incluir dados US em tempo real.
+ * Alpha Vantage — estimativas com histórico de revisões (EARNINGS_ESTIMATES),
+ * fundamentos complementares (OVERVIEW), perfil de ETFs e, como reserva,
+ * histórico e proventos.
+ *
+ * Plano gratuito = 25 requisições/DIA. Por isso:
+ *  - cada resposta fica no cache compartilhado do servidor por 1 a 7 dias
+ *    (todas as instâncias e deploys usam a mesma cópia);
+ *  - respostas de erro/limite nunca entram no cache;
+ *  - cotação, notícias, câmbio e juros vêm de fontes gratuitas sem limite
+ *    diário (Finnhub, AwesomeAPI/Banco Central, FRED). Só um plano pago
+ *    (`ALPHA_VANTAGE_REALTIME=true`) volta a usar a Alpha Vantage para isso.
  */
 export class AlphaVantageProvider implements MarketDataProvider {
   readonly name = NAME;
-  readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
-    "quote", "history", "fundamentals", "estimates", "analysts", "news", "marketNews",
-    "dividends", "fx", "macro", "etfProfile",
-  ]);
+  readonly capabilities: ReadonlySet<Capability>;
 
-  constructor(private apiKey: string, private realtime = false) {}
+  constructor(private apiKey: string, private realtime = false) {
+    this.capabilities = new Set<Capability>([
+      "history", "fundamentals", "estimates", "analysts", "dividends", "etfProfile",
+      ...(realtime ? (["quote", "news", "marketNews", "fx", "macro"] as const) : []),
+    ]);
+  }
 
-  private async call<T extends AvBody>(fn: string, params: Record<string, string>, revalidate: number, ticker?: string): Promise<T> {
-    const q = new URLSearchParams({ function: fn, ...params, apikey: this.apiKey });
-    if (fn === "GLOBAL_QUOTE" && this.realtime) q.set("entitlement", "realtime");
-    const body = await getJson<T>(NAME, fn, `${BASE}?${q.toString()}`, { revalidate, ticker });
-    const problem = body["Error Message"] ?? body.Note ?? body.Information;
-    if (problem) {
-      const text = String(problem);
-      // Limite diário/por minuto → pausa o fornecedor; função premium → pausa só a função.
-      if (/rate limit|requests per|per day|frequency/i.test(text)) blockEndpoint(`${NAME}|*`, 429, 30 * 60_000);
-      else if (/premium/i.test(text)) blockEndpoint(`${NAME}|${fn}`, 403, 12 * 3600_000);
-      throw new ProviderUnavailableError(NAME, fn, text.slice(0, 160));
-    }
-    return body;
+  /** `ttl` em segundos: tempo que a resposta válida fica no cache compartilhado. */
+  private call<T extends AvBody>(fn: string, params: Record<string, string>, ttl: number, ticker?: string): Promise<T> {
+    const fetchOnce = async () => {
+      const q = new URLSearchParams({ function: fn, ...params, apikey: this.apiKey });
+      if (fn === "GLOBAL_QUOTE" && this.realtime) q.set("entitlement", "realtime");
+      // Sem cache no fetch: a Alpha Vantage responde 200 até para "limite atingido".
+      const body = await getJson<T>(NAME, fn, `${BASE}?${q.toString()}`, { revalidate: 0, ticker });
+      const problem = body["Error Message"] ?? body.Note ?? body.Information;
+      if (problem) {
+        const text = String(problem);
+        // Limite diário/por minuto → pausa o fornecedor; função premium → pausa só a função.
+        if (/rate limit|requests per|per day|frequency/i.test(text)) blockEndpoint(`${NAME}|*`, 429, 30 * 60_000);
+        else if (/premium/i.test(text)) blockEndpoint(`${NAME}|${fn}`, 403, 12 * 3600_000);
+        throw new ProviderUnavailableError(NAME, fn, text.slice(0, 160));
+      }
+      return body;
+    };
+    if (ttl <= 0) return fetchOnce();
+    // Erros lançados não são guardados; a chave não inclui a API key.
+    return unstable_cache(fetchOnce, ["alphavantage", fn, JSON.stringify(params)], { revalidate: ttl })();
   }
 
   async getQuote(ticker: string): Promise<Quote> {
@@ -85,13 +101,16 @@ export class AlphaVantageProvider implements MarketDataProvider {
   }
 
   async getDailyHistory(ticker: string): Promise<PriceHistory> {
+    // Reserva quando não há Tiingo. O ajustado é premium: no plano gratuito,
+    // só o compacto (100 pregões), 1 consulta por ativo por dia.
     let body: AvBody;
-    let adjusted = true;
+    let adjusted = this.realtime;
     try {
+      if (!adjusted) throw new Error("plano gratuito");
       body = await this.call<AvBody>("TIME_SERIES_DAILY_ADJUSTED", { symbol: symbol(ticker), outputsize: "full" }, 3600, ticker);
     } catch {
       adjusted = false;
-      body = await this.call<AvBody>("TIME_SERIES_DAILY", { symbol: symbol(ticker), outputsize: "compact" }, 3600, ticker);
+      body = await this.call<AvBody>("TIME_SERIES_DAILY", { symbol: symbol(ticker), outputsize: "compact" }, 24 * 3600, ticker);
     }
     const series = body["Time Series (Daily)"] as Record<string, Record<string, string>> | undefined;
     if (!series) throw new ProviderUnavailableError(NAME, "history", ticker);
@@ -121,7 +140,7 @@ export class AlphaVantageProvider implements MarketDataProvider {
   }
 
   private overview(ticker: string) {
-    return this.call<Record<string, string> & AvBody>("OVERVIEW", { symbol: symbol(ticker) }, 12 * 3600, ticker);
+    return this.call<Record<string, string> & AvBody>("OVERVIEW", { symbol: symbol(ticker) }, 3 * 86_400, ticker);
   }
 
   async getFundamentals(ticker: string): Promise<Fundamentals> {
@@ -168,9 +187,10 @@ export class AlphaVantageProvider implements MarketDataProvider {
   }
 
   async getEarningsEstimates(ticker: string): Promise<EarningsEstimates> {
+    // Surpresas de lucro (EARNINGS) vêm da Finnhub, gratuita; aqui só as revisões.
     const [est, earn] = await Promise.all([
-      this.call<AvBody>("EARNINGS_ESTIMATES", { symbol: symbol(ticker) }, 12 * 3600, ticker).catch(() => null),
-      this.call<AvBody>("EARNINGS", { symbol: symbol(ticker) }, 12 * 3600, ticker).catch(() => null),
+      this.call<AvBody>("EARNINGS_ESTIMATES", { symbol: symbol(ticker) }, 86_400, ticker).catch(() => null),
+      this.realtime ? this.call<AvBody>("EARNINGS", { symbol: symbol(ticker) }, 12 * 3600, ticker).catch(() => null) : null,
     ]);
     const rows = ((est?.estimates as Record<string, string>[] | undefined) ?? []);
     const horizonMap: Record<string, string> = {
@@ -257,7 +277,7 @@ export class AlphaVantageProvider implements MarketDataProvider {
   }
 
   async getDividends(ticker: string): Promise<DividendInfo> {
-    const body = await this.call<AvBody>("DIVIDENDS", { symbol: symbol(ticker) }, 12 * 3600, ticker);
+    const body = await this.call<AvBody>("DIVIDENDS", { symbol: symbol(ticker) }, 7 * 86_400, ticker);
     const data = (body.data as Record<string, string>[] | undefined) ?? [];
     const history = data
       .map((d) => ({ ex_date: d.ex_dividend_date, pay_date: d.payment_date && d.payment_date !== "None" ? d.payment_date : null, amount: toNum(d.amount) ?? 0 }))
@@ -325,7 +345,7 @@ export class AlphaVantageProvider implements MarketDataProvider {
   }
 
   async getEtfProfile(ticker: string): Promise<EtfProfile> {
-    const b = await this.call<AvBody>("ETF_PROFILE", { symbol: symbol(ticker) }, 24 * 3600, ticker);
+    const b = await this.call<AvBody>("ETF_PROFILE", { symbol: symbol(ticker) }, 7 * 86_400, ticker);
     const holdings = ((b.holdings as Record<string, string>[] | undefined) ?? []).slice(0, 15).map((h) => ({
       symbol: h.symbol && h.symbol !== "n/a" ? h.symbol : null,
       name: h.description ?? h.symbol ?? "—",

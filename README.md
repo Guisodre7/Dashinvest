@@ -66,6 +66,7 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 - Abrir ou recarregar o app sempre traz análise atual (no máximo 30 s). Só a troca de aba reaproveita a análise anterior em memória (até 10 min, com selo "atualizando…" e recarga automática). Qualquer gravação muda um cookie de versão dos dados, então nenhuma instância mostra posições anteriores a uma compra. O cálculo do aporte sempre usa dados novos.
 - Patrimônio, L/P, retornos e pesos do painel são recalculados no navegador a cada cotação nova (`LivePortfolio.tsx`).
 - Cotações com 5 s de cache compartilhado; cada cotação mantém o timestamp do fornecedor, e a idade exibida é real.
+- Câmbio com 60 s de cache; juros (FRED) e histórico (Tiingo) com 6 h.
 
 ## Configuração
 
@@ -78,13 +79,20 @@ A camada de IA (LLM resumindo dados estruturados) fica para a próxima fase. O m
 3. **Primeiro login**: senha → cadastro do app autenticador (QR code) → painel.
 4. **Cron**: `vercel.json` agenda `/api/cron/daily` para 21:30 UTC em dias úteis. Esse job grava o snapshot da carteira, o histórico de estimativas e de analistas, e os alertas. Defina `CRON_SECRET` e `OWNER_USER_ID`.
 
-### Fornecedores de dados (`MarketDataProvider`)
+### Fornecedores de dados (`MarketDataProvider`) — tudo gratuito
 
 Todas as análises dependem apenas da interface `src/lib/market/provider.ts`. Para trocar de fornecedor, basta implementar essa interface.
 
-- **Finnhub**: cotações US em tempo real, métricas fundamentais, consenso mensal, notícias e calendário de earnings. Alguns endpoints (price-target, upgrade/downgrade, eps-estimate, bid/ask) exigem plano pago. Sem eles, o campo fica indisponível; nada é estimado no lugar.
-- **Alpha Vantage**: histórico diário, OVERVIEW, `EARNINGS_ESTIMATES` (com as médias de 30 e 90 dias atrás, que alimentam as revisões), notícias com sentimento, dividendos, perfil de ETF, USD/BRL, Treasury 10Y e Fed Funds. O plano gratuito (25 req/dia) não é suficiente para 10 ativos: use plano pago.
-- O modo `composite` usa a Finnhub para cotações e completa com a Alpha Vantage os campos que faltarem (a origem de cada campo fica registrada no `source`).
+| Dado | Fonte (plano gratuito) | Limite | Chave |
+|---|---|---|---|
+| Cotação US em tempo real, métricas fundamentais, consenso, surpresas de lucro, notícias, calendário de earnings | Finnhub | 60/min | `FINNHUB_API_KEY` |
+| Histórico diário ajustado (5 anos) e proventos | Tiingo | ~1.000/dia | `TIINGO_API_KEY` |
+| Câmbio USD/BRL | AwesomeAPI (intradiário) + Banco Central, SGS 1 (fechamento e variação em 1 mês) | — | sem chave |
+| Treasury 10Y e Fed Funds | FRED (CSV público) | — | sem chave |
+| Revisões de estimativas (30/90 dias), OVERVIEW complementar, perfil de ETF | Alpha Vantage | **25/dia** | `ALPHA_VANTAGE_API_KEY` |
+
+- **Orçamento da Alpha Vantage**: cada resposta fica no cache compartilhado do servidor (Data Cache da Vercel) por 1 dia (estimativas), 3 dias (OVERVIEW) ou 7 dias (perfil de ETF, proventos). Respostas de erro ou de limite atingido nunca entram no cache. Uso típico: ~9 consultas/dia; sem a Tiingo, ~22/dia, porque o histórico também passa a vir da Alpha Vantage (só 100 pregões, sem ajuste).
+- Endpoints premium da Finnhub (price-target, upgrade/downgrade, eps-estimate, candles) ficam indisponíveis. O campo aparece como "—"; nada é estimado no lugar.
 - **Limitações honestas**: o VIX não está disponível nesses fornecedores e aparece como "Indisponível". S&P 500, Nasdaq, Dow e DXY são mostrados **via ETFs substitutos** (SPY/QQQ/DIA/UUP), identificados na tela. Duration, SEC yield e ratings do LQD e o P/FFO do VNQ aparecem como "indisponível no fornecedor atual".
 
 ## Desenvolvimento

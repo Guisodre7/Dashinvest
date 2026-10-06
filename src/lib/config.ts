@@ -19,6 +19,8 @@ export const serverConfig = {
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY ?? "",
   /** Plano Alpha Vantage com dados realtime/US premium contratado? */
   alphaVantageRealtime: process.env.ALPHA_VANTAGE_REALTIME === "true",
+  /** Histórico diário e proventos (plano gratuito). */
+  tiingoApiKey: process.env.TIINGO_API_KEY ?? "",
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   llmModel: process.env.LLM_MODEL ?? "claude-opus-5",
