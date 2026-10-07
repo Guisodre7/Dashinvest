@@ -3,18 +3,13 @@ import type { Stance } from "../analysis/stance";
 import type { Thesis } from "../thesis/logic";
 import type { MacroIndicator } from "../market/types";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
+import { NEWS_CATEGORY_PT } from "../market/newsLabels";
 import { newsText, type Candidate, type NewsRef } from "./rules";
 
 const fmtPct = (v: number, d = 1) => `${v > 0 ? "+" : ""}${v.toFixed(d).replace(".", ",")}%`;
 /** "🟢 Possível compressão" → "possível compressão" (sem emoji repetido no texto). */
 const plain = (title: string) => title.replace(/^[^\p{L}]+/u, "").replace(/^\p{Lu}/u, (c) => c.toLowerCase());
 
-const NEWS_CATEGORY_PT: Record<string, string> = {
-  EARNINGS: "resultados", AI: "inteligência artificial", REGULATION: "regulação", MACRO: "macroeconomia",
-  "INTEREST RATES": "juros", "M&A": "fusões e aquisições", PRODUCT: "produto", MANAGEMENT: "gestão",
-  LEGAL: "questões jurídicas", COMPETITION: "concorrência", CAPEX: "investimentos (capex)",
-  "SUPPLY CHAIN": "cadeia de suprimentos", "REAL ESTATE": "imobiliário", CREDIT: "crédito", MARKET: "mercado",
-};
 
 /**
  * Converte as análises da carteira internacional em candidatos a notificação.

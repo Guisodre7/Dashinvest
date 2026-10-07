@@ -1,3 +1,4 @@
+import { NEWS_CATEGORY_PT } from "../market/newsLabels";
 import type { Impact, NewsCategory, NewsItem } from "../market/types";
 
 /**
@@ -103,7 +104,7 @@ export function scoreNews(n: NewsItem, ticker: string | null, companyName?: stri
   reasons.push(`fonte ${cred.tier === 1 ? "de alta credibilidade" : cred.tier === 2 ? "reconhecida" : "de credibilidade limitada"} (${n.source})`);
   reasons.push(`publicada há ${formatHours(n.published_at, now)}`);
   if (pol.severe) reasons.push("tema de alta gravidade");
-  reasons.push(`categoria ${category}`);
+  reasons.push(`categoria ${NEWS_CATEGORY_PT[category] ?? category}`);
 
   let impact: Impact = "LOW";
   if (score >= 0.75 && cred.tier === 1) impact = "CRITICAL";

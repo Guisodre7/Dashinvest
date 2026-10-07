@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LiveChange, LiveFreshness, LivePrice, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LivePositionValue } from "@/components/LivePortfolio";
@@ -10,6 +10,8 @@ import AddToRadar from "@/components/AddToRadar";
 import SourceLinks from "@/components/SourceLinks";
 import StanceCard from "@/components/StanceCard";
 import StaleRefresher from "@/components/StaleRefresher";
+import TranslatedTitle from "@/components/TranslatedTitle";
+import { NEWS_CATEGORY_PT } from "@/lib/market/newsLabels";
 import { Kpi, ScoreBadge } from "@/components/sections";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
@@ -20,6 +22,8 @@ import { freshnessConfig } from "@/lib/freshness-config";
 import { getMarketDataProvider } from "@/lib/market";
 import { MARKET_STATUS_LABEL } from "@/lib/market/marketStatus";
 import { ETF_NOTES } from "@/lib/portfolio/etfNotes";
+
+const IMPACT_PT: Record<string, string> = { CRITICAL: "crítico", HIGH: "alto", MEDIUM: "médio", LOW: "baixo" };
 
 export default async function AssetPage({ params }: { params: Promise<{ ticker: string }> }) {
   const user = await requireUser();
@@ -351,20 +355,24 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
       </section>
 
       <section className="section">
-        <div className="section-head"><h2>Notícias</h2><span className="xsmall faint">impacto por recência, fonte, relevância e gravidade</span></div>
+        <div className="section-head"><h2>Notícias</h2><span className="xsmall faint">impacto por recência, fonte, relevância e gravidade · títulos com tradução automática · o link abre a matéria original</span></div>
         {a.news.length ? (
           <div className="card" style={{ padding: 0 }}>
-            {a.news.slice(0, 15).map((x) => (
+            {a.news.slice(0, 15).map((x, i) => {
+              // Só as 10 primeiras são traduzidas (cota gratuita); traduções ficam em cache por 30 dias.
+              const title = i < 10 ? <Suspense fallback={x.title}><TranslatedTitle text={x.title} /></Suspense> : x.title;
+              return (
               <div key={x.id} className="alert">
-                <span className={`sev sev-${x.impact}`}>{x.impact}</span>
+                <span className={`sev sev-${x.impact}`}>{IMPACT_PT[x.impact] ?? x.impact}</span>
                 <div>
-                  <div className="small">{x.url ? <a href={x.url} target="_blank" rel="noopener noreferrer nofollow"><strong>{x.title}</strong></a> : <strong>{x.title}</strong>}</div>
-                  <div className="xsmall muted">{x.source} · {x.category} · {x.polarity === "negative" ? "tom negativo" : x.polarity === "positive" ? "tom positivo" : "neutro"}</div>
+                  <div className="small">{x.url ? <a href={x.url} target="_blank" rel="noopener noreferrer nofollow"><strong>{title}</strong></a> : <strong>{title}</strong>}{x.url && <a className="xsmall" href={x.url} target="_blank" rel="noopener noreferrer nofollow" style={{ marginLeft: 6 }}>ler completa ↗</a>}</div>
+                  <div className="xsmall muted">{x.source} · {NEWS_CATEGORY_PT[x.category] ?? x.category} · {x.polarity === "negative" ? "tom negativo" : x.polarity === "positive" ? "tom positivo" : "neutro"}</div>
                   <div className="xsmall faint">{x.impact_reasons.join(" · ")}</div>
                 </div>
                 <div className="xsmall faint nowrap">{dateTimeEt(x.published_at)}{x.updated_at ? ` · atual. ${dateTimeEt(x.updated_at)}` : ""}</div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : <div className="card empty">Sem notícia recente confiável.</div>}
       </section>
