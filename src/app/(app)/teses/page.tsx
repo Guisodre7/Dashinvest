@@ -33,7 +33,8 @@ export default async function TesesPage({ searchParams }: { searchParams: Promis
             <label className="span-2">Premissas (uma por linha) — o que precisa continuar verdadeiro<textarea name="premises" rows={4} required placeholder={"Base de clientes crescendo acima de 15% ao ano\nExpansão no México e na Colômbia\nInadimplência sob controle"} /></label>
             <label className="span-2">Expectativa<input name="expectation" placeholder="Lucro crescendo 25%+ ao ano nos próximos 3 anos" /></label>
             <label className="span-2">Riscos que enxergo (um por linha)<textarea name="risks" rows={3} placeholder={"Regulação de juros do cartão\nConcorrência de bancos digitais"} /></label>
-            <label className="span-2">O que me faria mudar de ideia<input name="change" placeholder="Inadimplência subindo por 2 trimestres seguidos" /></label>
+            <label className="span-2">O que confirmaria a tese<input name="confirms" placeholder="Clientes ativos e receita por cliente crescendo; lucro subindo trimestre a trimestre" /></label>
+            <label className="span-2">O que invalidaria a tese (me faria mudar de ideia)<input name="change" placeholder="Inadimplência subindo por 2 trimestres seguidos" /></label>
             <label>Horizonte<input name="horizon" placeholder="3–5 anos" /></label>
             <input type="hidden" name="band" value={sp.banda ?? ""} /><input type="hidden" name="quality" value={sp.qualidade ?? ""} />
           </ActionForm>

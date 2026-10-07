@@ -21,6 +21,8 @@ export interface Thesis {
   expectation: string | null;
   risks: string[];
   changeMyMind: string | null;
+  /** O que confirmaria a tese: indicadores positivos esperados (spec §16). Opcional em teses antigas. */
+  confirms?: string | null;
   horizon: string | null;
   status: "ativa" | "encerrada";
   reviews: ThesisReview[];

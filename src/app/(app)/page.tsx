@@ -6,6 +6,8 @@ import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
 import SourceLinks from "@/components/SourceLinks";
 import ValueRange from "@/components/ValueRange";
+import AuditList from "@/components/AuditList";
+import { listAudit } from "@/lib/data/audit";
 import StanceCard from "@/components/StanceCard";
 import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
@@ -43,10 +45,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Só o que a aba precisa é calculado.
   const needsAllocation = tab === "resumo" || tab === "aporte";
-  const [cycle, previous, st] = await Promise.all([
+  const [cycle, previous, st, audit] = await Promise.all([
     needsAllocation ? getCycleCapital(ctx.repo, "US") : null,
     tab === "aporte" ? ctx.repo.getLatestRecommendation().catch(() => null) : null,
     needsAllocation ? loadStances(ctx, ctx.repo) : null,
+    tab === "aporte" ? listAudit(ctx.repo, "US") : [],
   ]);
   // Capital disponível NESTE ciclo: o valor vindo do plano mensal (Visão geral) ou o já informado
   // neste mês. Sem valor padrão, piso ou teto — a faixa de aportes do perfil é só contexto (spec §2).
@@ -85,7 +88,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       ),
     };
   }) : [];
-  const summaryAssets: SummaryAsset[] = (st?.stances ?? []).map((s) => ({ stance: s, price: analyses.find((a) => a.ticker === s.ticker)?.price ?? null, href: `/?aba=aporte#us-${s.ticker}` }));
+  const summaryAssets: SummaryAsset[] = (st?.stances ?? []).map((s) => {
+    const a = analyses.find((x) => x.ticker === s.ticker);
+    return { stance: s, price: a?.price ?? null, href: `/?aba=aporte#us-${s.ticker}`, weight: a?.currentWeight ?? null, maxWeight: a?.strategy.max_weight ?? null };
+  });
   const fallbackPrices = Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.price]));
   const movers = [...analyses].filter((a) => a.quote?.change_pct != null).sort((a, b) => Math.abs(b.quote!.change_pct!) - Math.abs(a.quote!.change_pct!)).slice(0, 3);
 
@@ -154,6 +160,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             <summary className="small muted">Radar completo (valuation, fundamentos, momentum, analistas, drawdown)</summary>
             <div style={{ marginTop: 10 }}><RadarTable analyses={analyses} /></div>
           </details>
+          <AuditList entries={audit} cur="US$" />
         </section>
       )}
 

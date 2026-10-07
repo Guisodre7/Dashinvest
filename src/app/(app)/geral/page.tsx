@@ -4,7 +4,9 @@ import ActionForm from "@/components/ActionForm";
 import { Kpi, MacroPanel, WeightBar } from "@/components/sections";
 import { splitMonthly } from "@/lib/allocation/split";
 import { loadBrStances } from "@/lib/data/brStances";
-import { loadStances } from "@/lib/data/stances";
+import { HISTORY_KEY, loadStances, type StanceHistory } from "@/lib/data/stances";
+import { calibrate } from "@/lib/analysis/calibration";
+import { BAND_META } from "@/lib/analysis/stance";
 import { parseMoneyInput } from "@/lib/userNumber";
 import { saveSplitTarget } from "./actions";
 import { requireUser } from "@/lib/auth";
@@ -23,7 +25,9 @@ export default async function GeralPage({ searchParams }: { searchParams: Promis
   const user = await requireUser();
   const ctx = await loadContext(user);
   const br = await loadBrazil(ctx.repo);
-  const [splitSaved, projection] = await Promise.all([ctx.repo.getSetting<number>("split_target").catch(() => null), ctx.repo.getProjectionSettings().catch(() => null)]);
+  const [splitSaved, projection, hist] = await Promise.all([ctx.repo.getSetting<number>("split_target").catch(() => null), ctx.repo.getProjectionSettings().catch(() => null), ctx.repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null)]);
+  // Avaliação do próprio painel (spec §26): as faixas de ontem renderam o que prometiam?
+  const calib = [30, 90, 180].map((h) => calibrate(hist ?? {}, h));
   const splitTarget = splitSaved ?? projection?.brazilPct ?? 50;
   const monthly = parseMoneyInput(totalRaw);
   // Oportunidades só são calculadas quando o plano é pedido (fundamentos da B3 têm cache de 24h).
@@ -140,6 +144,24 @@ export default async function GeralPage({ searchParams }: { searchParams: Promis
             <p className="xsmall faint">Aproximação pela classe de cada posição. Exposição setorial (bancos, commodities, tecnologia) entra quando os ativos tiverem classificação por setor.</p>
           </div>
         </div>
+      </section>
+
+      <section className="section">
+        <details className="card">
+          <summary className="small"><strong>Avaliação do painel</strong> <span className="muted">— o que ele chamou de barato rendeu mais que o caro? (sem olhar o futuro)</span></summary>
+          <div className="stack" style={{ marginTop: 10 }}>
+            {calib.map((c) => (
+              <div key={c.horizonDays} className="xsmall">
+                <strong>{c.horizonDays} dias depois:</strong>{" "}
+                {!c.ready ? <span className="muted">coletando histórico ({c.daysOfHistory} dia(s) gravados; resultado confiável só com mais tempo e observações).</span> : null}
+                {c.outcomes.length > 0 && (
+                  <span>{c.outcomes.map((o) => `${BAND_META[o.band].label}: ${o.avg >= 0 ? "+" : ""}${o.avg.toFixed(1)}% em média (mediana ${o.median.toFixed(1)}%, ${Math.round(o.hitRate * 100)}% positivos, n=${o.n})`).join(" · ")}</span>
+                )}
+              </div>
+            ))}
+            <p className="xsmall faint">Retorno só de preço (sem dividendos, custos e impostos), a partir das posturas gravadas diariamente. Serve para calibrar os parâmetros do motor — não é promessa de retorno.</p>
+          </div>
+        </details>
       </section>
 
       <p className="xsmall faint section">Detalhes: <Link href="/brasil">Carteira Brasil</Link> · <Link href="/">Carteira Internacional</Link></p>

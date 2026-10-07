@@ -21,6 +21,15 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 | §24 Score | "Score 65" na linha do aporte | 🔧 removido da linha; prioridade vem do valuation explicado |
 | §2 Capital do ciclo | exterior usava US$ 550 fixo quando nada era informado; campo "Aporte padrão"; teto de US$ 1 milhão; "10.000" lido como 10 | 🔧 conceito **capital disponível neste ciclo** por carteira (`lib/data/cycleCapital.ts`): sempre o valor informado, sem padrão, piso, teto ou normalização; sem valor informado, o painel pede o valor em vez de supor; "10.000" = dez mil |
 
+## Pendentes resolvidos
+
+| Seção | Agora |
+|---|---|
+| §33 Auditoria | 🔧 cada cálculo de aporte (Brasil e exterior) grava data/hora, capital, preço observado, intervalo de valor, faixa, postura, peso, decisão, justificativa, confiança e riscos (`lib/data/audit.ts`); "Histórico das recomendações" no fim da página de aporte |
+| §14 Realização | 🔧 o bloco de venda responde também "a posição ficou concentrada?" e "existe alternativa claramente melhor para o valor?" |
+| §16 Tese | 🔧 campos separados "o que confirmaria a tese" e "o que invalidaria a tese" |
+| §26 Avaliação histórica | 🔧 avaliação ponto-a-ponto, sem look-ahead, das faixas gravadas diariamente (30/90/180 dias) na Visão geral; histórico ampliado para ~400 dias. Os parâmetros só devem ser recalibrados quando a amostra estiver pronta |
+
 ## Já conforme
 
 - §1/§4/§25 Não executa ordens; recomenda inclusive inação ("esperar", "não aumentar", caixa de oportunidade). ✅
@@ -39,7 +48,3 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 |---|---|---|
 | §9 Bancos | CET1, inadimplência/NPL, cobertura, eficiência | ⏳ não existem em fonte gratuita estruturada; caminho: leitura do release trimestral por IA, por evento |
 | §11 FII de papel | LTV, rating, indexadores, inadimplência dos CRIs | ⏳ só no relatório gerencial (PDF); mesmo caminho acima |
-| §14 Realização | "existe alternativa claramente superior?" e concentração no patrimônio total | ⏳ hoje a venda olha só o próprio ativo; incluir comparação com as oportunidades da carteira |
-| §26 Backtest | parâmetros de `params.ts` sem validação histórica | ⏳ o painel grava a postura diária de cada ativo; montar avaliação sem look-ahead após 6–12 meses de histórico |
-| §33 Auditoria | recomendações do Brasil não são gravadas (só as do exterior) | ⏳ gravar cada cálculo de aporte BR com preço, valuation, decisão e confiança |
-| §16 Tese | campo explícito "o que confirmaria a tese" | ⏳ hoje as premissas cumprem esse papel; separar quando as teses forem cadastradas |

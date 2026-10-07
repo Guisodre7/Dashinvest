@@ -28,7 +28,7 @@ export async function createThesis(_: FormState, fd: FormData): Promise<FormStat
     id: randomUUID(), market, ticker, created_at: new Date().toISOString(),
     price: num(fd.get("price")), quantity: num(fd.get("quantity")), band, quality,
     text, premises, expectation: str(fd.get("expectation"), 600), risks: lines(fd.get("risks")),
-    changeMyMind: str(fd.get("change"), 600), horizon: str(fd.get("horizon"), 60), status: "ativa", reviews: [],
+    changeMyMind: str(fd.get("change"), 600), confirms: str(fd.get("confirms"), 600), horizon: str(fd.get("horizon"), 60), status: "ativa", reviews: [],
   };
   const repo = await getRepo(user.id);
   await saveTheses(repo, [t, ...(await getTheses(repo))]);

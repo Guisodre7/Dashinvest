@@ -6,6 +6,7 @@ import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import SourceLinks from "@/components/SourceLinks";
 import ValueRange from "@/components/ValueRange";
+import AuditList from "@/components/AuditList";
 import { brConfidence } from "@/lib/analysis/brValuation";
 import StanceCard from "@/components/StanceCard";
 import AllocationView from "@/components/AllocationView";
@@ -20,6 +21,7 @@ import { loadBrazil } from "@/lib/data/brazil";
 import { loadBrStances } from "@/lib/data/brStances";
 import { allocateBr } from "@/lib/allocation/brAllocate";
 import { brAllocationResult } from "@/lib/allocation/brView";
+import { appendAudit, auditEntry, listAudit } from "@/lib/data/audit";
 import { getCycleCapital, setCycleCapital } from "@/lib/data/cycleCapital";
 import { parseMoneyInput } from "@/lib/userNumber";
 import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
@@ -49,6 +51,14 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   if (informed && informed > 0 && informed !== cycle?.amount) await setCycleCapital(repo, "BR", informed);
   const aporteValor = informed && informed > 0 ? informed : cycle?.amount ?? null;
   const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? brAllocationResult(allocateBr(aporteValor, br.summary, br.strategy, brs.views), br.summary, br.strategy, brs.views) : null;
+  // Auditoria (spec §33): grava quando o usuário calcula (valor enviado), sem repetir no mesmo dia.
+  if (alloc && informed && informed > 0) {
+    await appendAudit(repo, auditEntry("BR", alloc, (t) => {
+      const v = brs.views.find((x) => x.code === t);
+      return { price: v?.price ?? null, stance: v?.stance ?? null, fair: v?.fair ? { low: v.fair.low, mid: v.fair.mean, high: v.fair.high } : null };
+    }));
+  }
+  const audit = tab === "aporte" ? await listAudit(repo, "BR") : [];
   const hist = tab === "aporte" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
   const brBuys = tab === "aporte" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
     const v = brs.views.find((x) => x.code === e.code);
@@ -66,7 +76,11 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   };
   const label = (h: { code: string; name: string | null; asset_class: Parameters<typeof PRICED.has>[0] }) => (PRICED.has(h.asset_class) ? h.code : h.name ?? h.code);
   const recent = [...br.entries].reverse().slice(0, 30);
-  const summaryAssets: SummaryAsset[] = brs.views.map((v) => ({ stance: v.stance, price: v.price, href: `/brasil?aba=aporte#br-${v.code}` }));
+  const summaryAssets: SummaryAsset[] = brs.views.map((v) => {
+    const nIn = strategy.assets.filter((x) => x.enabled && x.asset_class === v.assetClass).length || 1;
+    const target = strategy.assets.some((x) => x.enabled && x.code === v.code) ? strategy.classes[v.assetClass] / nIn : 0;
+    return { stance: v.stance, price: v.price, href: `/brasil?aba=aporte#br-${v.code}`, weight: s.holdings.find((h) => h.code === v.code)?.weight ?? null, maxWeight: target ? target * 1.5 : null };
+  });
   // Próximo aporte (prévia): quem tem prioridade média/alta e está abaixo da meta.
   const nextUp = brs.views.map((v) => {
     const a = strategy.assets.find((x) => x.code === v.code);
@@ -218,6 +232,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
               <div style={{ marginTop: 10 }}><EntryReviewList buys={brBuys} cur="R$" /></div>
             </details>
           )}
+          <AuditList entries={audit} cur="R$" />
         </section>
       )}
 

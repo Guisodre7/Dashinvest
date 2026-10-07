@@ -2,6 +2,7 @@
 import { allocate, type AllocationResult } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { appendAudit, auditEntry } from "@/lib/data/audit";
 import { setCycleCapital } from "@/lib/data/cycleCapital";
 import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
 import { parseMoneyInput } from "@/lib/userNumber";
@@ -40,6 +41,14 @@ export async function calculateContribution(_prev: ContributionState, formData: 
     mood: ctx.mood,
   });
   await setCycleCapital(ctx.repo, "US", amount);
+  // Auditoria (spec §33): preço observado, intervalo de valor, postura e decisão de cada ativo.
+  if (!result.blocked) {
+    await appendAudit(ctx.repo, auditEntry("US", result, (t) => {
+      const a = ctx.analyses.find((x) => x.ticker === t);
+      const fv = a?.fairValue;
+      return { price: a?.price ?? null, stance: stances.find((x) => x.ticker === t) ?? null, fair: fv?.available ? { low: fv.min, mid: fv.mean, high: fv.max } : null };
+    }));
+  }
   try {
     await ctx.repo.saveRecommendation(result);
   } catch {

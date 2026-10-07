@@ -5,8 +5,13 @@ import { buyTiming } from "./WhereBoard";
 const money = (cur: string, v: number | null | undefined, d = 2) =>
   v === null || v === undefined ? "—" : `${cur} ${v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
 const qty = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
+const pct1 = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-export interface SummaryAsset { stance: Stance; price: number | null; href: string }
+export interface SummaryAsset {
+  stance: Stance; price: number | null; href: string;
+  /** Peso hoje e peso máximo na carteira (%) — para a pergunta "a posição ficou concentrada?" (spec §14). */
+  weight?: number | null; maxWeight?: number | null;
+}
 
 /**
  * Venda parcial: só quando o preço está bem acima do valor justo da análise.
@@ -14,6 +19,11 @@ export interface SummaryAsset { stance: Stance; price: number | null; href: stri
  */
 export function SellCard({ items, cur }: { items: SummaryAsset[]; cur: "US$" | "R$" }) {
   const sells = items.filter((x) => (x.stance.action === "realizacao" || x.stance.action === "reduzir") && x.stance.realization?.efficient && x.price);
+  // Spec §14: existe alternativa claramente superior? (oportunidades pelo valuation na mesma carteira)
+  const alternatives = items.filter((x) => x.stance.action === "comprar" || x.stance.action === "recompra").slice(0, 3);
+  const concentration = (x: SummaryAsset) => x.weight != null && x.maxWeight != null
+    ? x.weight > x.maxWeight ? `Posição concentrada: ${pct1(x.weight)}% da carteira (máximo ${pct1(x.maxWeight)}%).` : `Posição não concentrada (${pct1(x.weight)}% da carteira).`
+    : "";
   return (
     <div className="card stack">
       <h3>Venda parcial sugerida</h3>
@@ -21,7 +31,8 @@ export function SellCard({ items, cur }: { items: SummaryAsset[]; cur: "US$" | "
         <p className="small faint">Nenhuma venda: nenhum ativo seu está muito acima do valor justo. Peso acima da meta não gera venda — os próximos aportes corrigem.</p>
       ) : (
         <ul className="clean stack" style={{ gap: 10 }}>
-          {sells.map(({ stance: s, price, href }) => {
+          {sells.map((it) => {
+            const { stance: s, price, href } = it;
             const r = s.realization!;
             const fair = s.premiumPct !== null && price ? price / (1 + s.premiumPct / 100) : null;
             return (
@@ -35,6 +46,12 @@ export function SellCard({ items, cur }: { items: SummaryAsset[]; cur: "US$" | "
                   pois o preço de {money(cur, price)} está <strong>{s.premiumPct?.toFixed(0)}% acima</strong> do valor justo pela análise ({money(cur, fair)}).
                 </p>
                 <div className="xsmall muted">Imposto estimado {money(cur, r.estTax)} + custos {money(cur, r.fees)} · a maior parte da posição continua. Recompra em degraus se o preço voltar para a faixa justa.</div>
+                <div className="xsmall muted">
+                  {concentration(it)}
+                  {" "}{alternatives.length
+                    ? `Alternativas para o valor: ${alternatives.map((a) => a.stance.ticker).join(", ")} (faixa de compra).`
+                    : "Sem alternativa claramente melhor agora: o valor pode ficar como caixa de oportunidade."}
+                </div>
               </li>
             );
           })}

@@ -43,7 +43,8 @@ export default async function ThesisPage({ params }: { params: Promise<{ id: str
           <ul className="clean small">{t.premises.map((p) => <li key={p}>{p}</li>)}</ul>
           {t.expectation && <p className="small"><strong>Expectativa:</strong> {t.expectation}</p>}
           {t.risks.length > 0 && <p className="small"><strong>Riscos mapeados:</strong> {t.risks.join("; ")}</p>}
-          {t.changeMyMind && <p className="small"><strong>Mudaria de ideia se:</strong> {t.changeMyMind}</p>}
+          {t.confirms && <p className="small"><strong>Confirmaria a tese:</strong> {t.confirms}</p>}
+          {t.changeMyMind && <p className="small"><strong>Invalidaria a tese (mudaria de ideia se):</strong> {t.changeMyMind}</p>}
           <p className="xsmall faint">Na data: preço {cur} {f(t.price)}{t.band ? ` · valuation ${BAND_META[t.band]?.label.toLowerCase() ?? t.band}` : ""}{t.quality ? ` · qualidade ${t.quality}` : ""}</p>
         </div>
         <div className="card stack">

@@ -30,12 +30,13 @@ export const qualityPremiumOf = (stances: Stance[]) => stances.filter((s) => s.q
 
 const dayBr = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 
-/** Grava (1x por dia, sobrescreve o dia) e mantém ~200 dias. */
+/** Grava (1x por dia, sobrescreve o dia) e mantém ~400 dias. */
 export async function recordStanceHistory(repo: Repo, stances: Stance[], prices: Record<string, number | null>, now = new Date()) {
   const hist = ((await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null)) ?? {}) as StanceHistory;
   const fairOf = (s: Stance) => (s.bands.length ? s.bands[2].low! / 0.95 : null);
   hist[dayBr(now)] = Object.fromEntries(stances.map((s) => [s.ticker, { p: prices[s.ticker] ?? null, b: s.band, q: s.quality, t: s.thesis, a: s.action, f: fairOf(s) }]));
-  const keep = Object.keys(hist).sort().slice(-200);
+  // ~400 dias: base da avaliação histórica das faixas (spec §26).
+  const keep = Object.keys(hist).sort().slice(-400);
   await repo.setSetting(HISTORY_KEY, Object.fromEntries(keep.map((k) => [k, hist[k]])));
 }
 
