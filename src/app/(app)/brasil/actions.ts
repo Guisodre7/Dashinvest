@@ -6,6 +6,7 @@ import { getRepo } from "@/lib/db/repo";
 import { B3_TICKER, BrStrategySchema, DEFAULT_BR_STRATEGY, parseBrStrategy } from "@/lib/portfolio/brStrategy";
 import { z } from "zod";
 import { matchHolding, planFundImport, slugify, type FundImportInput, type FundImportPlan } from "@/lib/portfolio/fundImport";
+import { refreshFundBalances } from "@/lib/data/fundQuotas";
 import { applyEntry, PRICED, type AssetClass, type EntryInput, type Holding, type LedgerKind } from "@/lib/portfolio/ledger";
 
 export interface FormState { ok: boolean; message: string | null }
@@ -197,5 +198,36 @@ export async function confirmFundImport(raw: unknown): Promise<FormState> {
     return done(userId, `${p.isNew ? "Posição criada" : "Posição atualizada"}: ${p.name}.`);
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "Erro ao salvar." };
+  }
+}
+
+/** CNPJ de um fundo já cadastrado (necessário para buscar a cota diária na CVM). */
+export async function setFundCnpj(_: FormState, fd: FormData): Promise<FormState> {
+  try {
+    const user = await requireUser();
+    const repo = await getRepo(user.id);
+    const code = String(fd.get("code") ?? "");
+    const cnpj = String(fd.get("cnpj") ?? "").replace(/\D/g, "");
+    if (cnpj.length !== 14) throw new Error("CNPJ deve ter 14 dígitos (está no extrato ou na lâmina do fundo).");
+    const h = (await repo.getHoldings("BR")).find((x) => x.code === code);
+    if (!h || h.asset_class !== "renda_fixa") throw new Error("Fundo não encontrado.");
+    await repo.saveHolding({ ...h, cnpj });
+    const st = await refreshFundBalances(repo);
+    return done(user.id, `CNPJ salvo. ${st.message}`);
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro ao salvar." };
+  }
+}
+
+/** Busca agora a cota mais recente publicada pela CVM (o job diário faz o mesmo sozinho). */
+export async function refreshFundsNow(_: FormState, _fd: FormData): Promise<FormState> {
+  try {
+    const user = await requireUser();
+    const repo = await getRepo(user.id);
+    const st = await refreshFundBalances(repo);
+    if (!st.ok) return { ok: false, message: st.message };
+    return done(user.id, st.message);
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro ao atualizar." };
   }
 }

@@ -30,7 +30,8 @@ import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, pp, tone } from "@/lib/format";
 import { humanAge } from "@/lib/market/freshness";
 import { CLASS_LABEL, KIND_LABEL, PRICED } from "@/lib/portfolio/ledger";
-import { registerEntry, saveBrStrategy, undoEntry } from "./actions";
+import { FUND_STATUS_KEY, type FundRefreshStatus } from "@/lib/data/fundQuotas";
+import { refreshFundsNow, registerEntry, saveBrStrategy, setFundCnpj, undoEntry } from "./actions";
 
 // Abas navegadas pelo submenu da carteira (mesmo padrão do Internacional).
 const BR_TABS = [{ key: "resumo" }, { key: "aporte" }, { key: "posicoes" }, { key: "movimentar" }, { key: "estrategia" }] as const;
@@ -67,6 +68,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
     return { ticker: e.code, date: e.trade_date, price: e.price!, quantity: e.quantity, snap: snapshotOn(hist, e.trade_date, e.code), now: { price: v?.price ?? null, band: v?.stance.band ?? null, thesis: v?.stance.thesis ?? "não verificável" as const } };
   }) : [];
   const { summary: s, strategy, quotes } = br;
+  const fundStatus = tab === "posicoes" ? await repo.getSetting<FundRefreshStatus>(FUND_STATUS_KEY).catch(() => null) : null;
   const month = new Date().toISOString().slice(0, 7);
   const monthIn = br.entries.filter((e) => e.trade_date.startsWith(month) && (e.kind === "buy" || e.kind === "contribution")).reduce((a, e) => a + e.amount + e.fees, 0);
   const monthIncome = br.entries.filter((e) => e.trade_date.startsWith(month) && (e.kind === "dividend" || e.kind === "income")).reduce((a, e) => a + e.amount, 0);
@@ -133,7 +135,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
         </div>
         <div className="card card-tight small">
           <div>Cotações B3: brapi (atrasadas, nunca tempo real)</div>
-          <div className="xsmall faint">Renda fixa: saldo informado por você, com a data de cada atualização.</div>
+          <div className="xsmall faint">Fundos de renda fixa com CNPJ: saldo atualizado pela cota diária oficial da CVM (1–2 dias de atraso, bruto de IR). Demais títulos: saldo informado por você. Sempre com a data.</div>
         </div>
       </section>
 
@@ -273,6 +275,39 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
+      {s.holdings.some((h) => h.asset_class === "renda_fixa") && (
+        <section className="section">
+          <div className="section-head"><h2>Renda fixa automática</h2><span className="xsmall faint">cota diária oficial · Dados Abertos da CVM · gratuito</span></div>
+          <div className="card stack">
+            <p className="small muted">
+              Fundos não são negociados na bolsa, então a brapi não traz o valor deles. Com o CNPJ, o painel busca a cota que o fundo
+              informa à CVM todo dia útil e atualiza o saldo: <strong>saldo novo = último saldo × cota nova ÷ cota da data desse saldo</strong>.
+              É o valor bruto estimado (antes de IR/IOF e come-cotas) e chega com 1–2 dias de atraso. Aportes e resgates continuam sendo registrados por você.
+            </p>
+            {s.holdings.filter((h) => h.asset_class === "renda_fixa").map((h) => (
+              <div key={h.code} className="row-wrap" style={{ justifyContent: "space-between" }}>
+                <div className="small"><strong>{h.name ?? h.code}</strong>
+                  <div className="xsmall faint">{h.cnpj ? `CNPJ ${h.cnpj} · saldo em ${h.current_value_at ? dateBr(h.current_value_at.slice(0, 10)) : "—"}` : "sem CNPJ: saldo só atualiza quando você informa"}</div>
+                </div>
+                {!h.cnpj && (
+                  <ActionForm action={setFundCnpj} submitLabel="Salvar CNPJ" submitClassName="btn btn-sm" className="row">
+                    <input type="hidden" name="code" value={h.code} />
+                    <input name="cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" aria-label={`CNPJ de ${h.name ?? h.code}`} required />
+                  </ActionForm>
+                )}
+              </div>
+            ))}
+            {fundStatus && (
+              <p className={`xsmall ${fundStatus.ok ? "faint" : "neg"}`}>
+                Última busca na CVM: {new Date(fundStatus.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · {fundStatus.message}
+              </p>
+            )}
+            {s.holdings.some((h) => h.asset_class === "renda_fixa" && h.cnpj) && (
+              <ActionForm action={refreshFundsNow} submitLabel="Atualizar pela CVM agora" submitClassName="btn btn-sm" className="row"><span className="xsmall faint">O job diário também faz isso sozinho.</span></ActionForm>
+            )}
+          </div>
+        </section>
+      )}
 
         </>
       )}

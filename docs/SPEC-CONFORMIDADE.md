@@ -28,6 +28,7 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 | §33 Auditoria | 🔧 cada cálculo de aporte (Brasil e exterior) grava data/hora, capital, preço observado, intervalo de valor, faixa, postura, peso, decisão, justificativa, confiança e riscos (`lib/data/audit.ts`); "Histórico das recomendações" no fim da página de aporte |
 | §14 Realização | 🔧 o bloco de venda responde também "a posição ficou concentrada?" e "existe alternativa claramente melhor para o valor?" |
 | §16 Tese | 🔧 campos separados "o que confirmaria a tese" e "o que invalidaria a tese" |
+| §21/§12 Renda fixa | 🔧 fundos com CNPJ têm o saldo atualizado pela cota diária oficial da CVM (Dados Abertos, gratuito): último saldo × cota nova ÷ cota da data do saldo; bruto de IR, com data; falha mantém o saldo anterior (`lib/market/cvmFunds.ts`, `lib/data/fundQuotas.ts`) |
 | §26 Avaliação histórica | 🔧 avaliação ponto-a-ponto, sem look-ahead, das faixas gravadas diariamente (30/90/180 dias) na Visão geral; histórico ampliado para ~400 dias. Os parâmetros só devem ser recalibrados quando a amostra estiver pronta |
 
 ## Teses-base (`docs/DASHINVEST_TESES_BASE.md`)
