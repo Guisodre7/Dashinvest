@@ -2,6 +2,7 @@ import type { TransactionRow } from "../db/repo";
 import type { PortfolioSummary } from "../portfolio/calc";
 import type { AssetAnalysis } from "./analyze";
 import { analystSignal } from "./analystSignal";
+import { PARAMS } from "./params";
 import { computeStance, DEFAULT_TAX, type Stance, type StanceInput, type TaxRules } from "./stance";
 
 export type TaxSettings = typeof DEFAULT_TAX;
@@ -63,5 +64,7 @@ export function usConfirmations(a: AssetAnalysis): Pick<StanceInput, "analystSco
   const sig = analystSignal(a.trend, a.analysts);
   const fv = a.fairValue;
   const impliedGap = fv.implied_growth != null && fv.base_growth != null ? fv.implied_growth - fv.base_growth : null;
-  return { analystScore: sig.score, uncertain: (sig.dispersion ?? 0) > 0.6 || fairFromAnalysis(a)?.basis === "historical-multiple", impliedGap };
+  // Incerteza alta (spec §22): analistas divergentes, métodos de valor justo divergentes ou base fraca.
+  const methodsDiverge = (fv.uncertainty_pct ?? 0) > PARAMS.valuation.maxMethodSpread * 100 / 2;
+  return { analystScore: sig.score, uncertain: (sig.dispersion ?? 0) > PARAMS.analysts.highDispersion || methodsDiverge || fairFromAnalysis(a)?.basis === "historical-multiple", impliedGap };
 }

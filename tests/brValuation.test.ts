@@ -49,7 +49,8 @@ describe("valuation e qualidade BR", () => {
     expect(v.fair!.mean).toBeCloseTo((graham + bazin) / 2, 2);
     expect(v.fair!.basis).toBe("graham-bazin");
     const q = brQuality(f);
-    expect(q.coverage).toBeCloseTo(2 / 5); // ROE e crescimento
+    // Itaú é banco: modelo setorial (spec §9) avalia ROE e crescimento — sem dívida/ROIC.
+    expect(q.coverage).toBe(1);
     expect(q.score).toBe(100);
   });
 

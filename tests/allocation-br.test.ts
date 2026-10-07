@@ -60,10 +60,10 @@ describe("divisão mensal Brasil × Exterior", () => {
   it("Brasil abaixo da meta: o aporte corrige o desvio primeiro", () => {
     expect(splitMonthly({ ...base, brValue: 30000, usValueBrl: 70000 }).brBrl).toBe(5000);
   });
-  it("dólar subiu 6% no mês: 10% a menos para o exterior, com explicação", () => {
+  it("câmbio é só contexto (spec §19): dólar +6% no mês não muda a divisão", () => {
     const r = splitMonthly({ ...base, fxChange1m: 6 });
-    expect(r.brBrl).toBe(3000);
-    expect(r.reasons.join(" ")).toMatch(/não é previsão/);
+    expect(r.brBrl).toBe(2500);
+    expect(r.reasons.join(" ")).toMatch(/sem market timing cambial/);
   });
   it("mais oportunidades no exterior puxam até 10%", () => {
     expect(splitMonthly({ ...base, usOpportunities: 3 }).usBrl).toBe(3000);

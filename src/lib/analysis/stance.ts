@@ -7,11 +7,13 @@
  *  - variação de preço ≠ valuation: a faixa vem do preço contra o valor justo
  *    estimado (intervalo, nunca número exato);
  *  - "barata" não é oportunidade se a qualidade é fraca ou a tese deteriorou;
- *  - "cara" não é "vender tudo": a estratégia padrão para empresa excelente
- *    esticada é realização PARCIAL, e só quando a posição pesa na carteira;
- *  - custos e impostos podem tornar a venda ineficiente;
+ *  - "cara" não é "vender tudo": realização é PARCIAL e só com valuation extrema,
+ *    tese não confirmada pelos lucros e custos/impostos que compensem (spec §14);
+ *  - recompra só quando ficou mais barato em relação ao valor econômico (spec §15);
  *  - nada é ordem: tudo é faixa sugerida para avaliação.
+ * Limiares em PARAMS (spec §23) — provisórios até backtest.
  */
+import { PARAMS } from "./params";
 
 export type QualityLevel = "excelente" | "boa" | "mediana" | "fraca" | "sem dados";
 export type ThesisState = "intacta" | "em observação" | "deteriorada" | "não verificável";
@@ -40,7 +42,7 @@ export const BAND_META: Record<BandKey, { label: string; emoji: string }> = {
 };
 
 /** Limites relativos ao valor justo médio: < 0,85 | 0,85–0,95 | 0,95–1,05 | 1,05–1,25 | > 1,25. */
-export const BAND_LIMITS: [number, number, number, number] = [0.85, 0.95, 1.05, 1.25];
+export const BAND_LIMITS: [number, number, number, number] = PARAMS.bands.normal;
 
 export interface TaxRules {
   /** Custo fixo por ordem (moeda do ativo). */
@@ -99,7 +101,7 @@ export interface StanceInput {
 }
 
 /** Com incerteza alta, a faixa de compra exige mais desconto. */
-const UNCERTAIN_LIMITS: [number, number, number, number] = [0.8, 0.92, 1.05, 1.25];
+const UNCERTAIN_LIMITS: [number, number, number, number] = PARAMS.bands.uncertain;
 
 export interface Band { key: BandKey; low: number | null; high: number | null }
 
@@ -209,7 +211,7 @@ export function computeStance(i: StanceInput): Stance {
     else if (good) { action = "realizacao"; headline = `Empresa continua boa, mas o preço está ${fmt(premiumPct, 0)}% acima do valor justo: avaliar vender uma parte e recomprar mais barato.`; }
     else if (quality !== "sem dados") { action = "reduzir"; headline = `Preço ${fmt(premiumPct, 0)}% acima do valor justo com qualidade apenas mediana/fraca: avaliar redução relevante.`; }
     else { action = "nao_aumentar"; headline = "Valuation extremamente esticado, sem dados de qualidade para sugerir venda: manter sem aumentar."; }
-  } else if (band === "esticado" && quality === "excelente" && (thesis === "intacta" || thesis === "não verificável") && (i.analystScore ?? 0) > -0.2 && (i.impliedGap ?? 0) <= 0.08) {
+  } else if (band === "esticado" && quality === "excelente" && (thesis === "intacta" || thesis === "não verificável") && (i.analystScore ?? 0) > PARAMS.analysts.blockBelow / 2 && (i.impliedGap ?? 0) <= PARAMS.valuation.impliedGrowthGap) {
     // Empresa excelente um pouco acima do valor justo: esperar "o preço certo" pode significar
     // nunca comprar um bom compositor. Aporte normal e menor (não é oportunidade).
     action = "manter"; qualityPremium = true;
@@ -230,9 +232,9 @@ export function computeStance(i: StanceInput): Stance {
 
   // Confirmações antes de chamar de oportunidade: analistas e expectativa embutida no preço.
   const buying = action === "comprar" || action === "recompra";
-  if (buying && (i.analystScore ?? 0) <= -0.4) {
+  if (buying && (i.analystScore ?? 0) <= PARAMS.analysts.blockBelow) {
     action = "nao_aumentar"; headline = "Preço atrativo, mas os analistas estão cortando lucro/recomendação: esperar estabilizar antes de aumentar.";
-  } else if (buying && (i.impliedGap ?? 0) > 0.08) {
+  } else if (buying && (i.impliedGap ?? 0) > PARAMS.valuation.impliedGrowthGap) {
     action = "manter"; headline = "Abaixo do valor justo pelos múltiplos, mas o preço ainda embute crescimento acima do histórico: aporte normal, sem pressa.";
   }
 
@@ -240,7 +242,8 @@ export function computeStance(i: StanceInput): Stance {
   if ((action === "realizacao" || action === "reduzir") && i.position && i.weight !== null) {
     const pos = i.position;
     // Tamanho pela distância do valor justo — o peso na carteira não decide venda.
-    const [lo, hi] = action === "reduzir" ? [20, 35] : premiumPct > 50 ? [20, 30] : [10, 20];
+    const R = PARAMS.realization;
+    const [lo, hi] = action === "reduzir" ? R.weakQuality : premiumPct > R.veryExtremePremiumPct ? R.veryExtreme : R.extreme;
     const shares = (p: number) => Math.floor(pos.quantity * p / 100 * 1e4) / 1e4;
     const valueHigh = r2(shares(hi) * i.price);
     const gainPerShare = i.price - pos.avgCost;
@@ -248,7 +251,7 @@ export function computeStance(i: StanceInput): Stance {
     const exempt = i.tax.monthlyExemption !== null && valueHigh <= i.tax.monthlyExemption;
     const estTax = exempt ? 0 : r2(estGain * i.tax.gainTaxRate);
     const fees = i.tax.feePerOrder;
-    const efficient = hi > 0 && valueHigh >= i.tax.minTicket && (estTax + fees) / Math.max(valueHigh, 1) <= 0.1;
+    const efficient = hi > 0 && valueHigh >= i.tax.minTicket && (estTax + fees) / Math.max(valueHigh, 1) <= PARAMS.realization.maxCostShare;
     const note = !efficient
       ? `Venda pequena demais ou custos/impostos altos (${i.currency} ${fmt(estTax + fees)} sobre ${i.currency} ${fmt(valueHigh)}): manter sem aumentar é mais eficiente.`
       : `Faixa sugerida para avaliação, não ordem. Imposto estimado ${i.currency} ${fmt(estTax)}${exempt ? " (dentro da isenção mensal)" : ""} + custos ${i.currency} ${fmt(fees)}. ${i.tax.note}`;

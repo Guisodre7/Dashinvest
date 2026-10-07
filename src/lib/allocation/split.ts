@@ -1,9 +1,10 @@
+import { PARAMS } from "../analysis/params";
+
 /**
  * Quanto do aporte mensal vai para cada carteira (Brasil × Exterior).
  * Base: corrigir o desvio da meta Brasil/Exterior com o próprio aporte.
- * Ajustes de contexto (pequenos, explicados, nunca previsão):
- *  - dólar subiu ≥ 5% no mês → 10% do aporte a menos no exterior (evita concentrar compra num pico de curto prazo); caiu ≥ 5% → 10% a mais;
- *  - lado com mais ativos em faixa atrativa recebe até 10% a mais.
+ * Ajuste (pequeno, explicado): o lado com mais ativos em faixa atrativa pelo valuation recebe
+ * um pouco mais. Câmbio aparece só como contexto (spec §19: sem market timing cambial).
  */
 export interface SplitInput {
   totalBrl: number;
@@ -34,16 +35,20 @@ export function splitMonthly(i: SplitInput): SplitResult {
     ? `Sem patrimônio ainda: divisão pela meta (${fmt(t * 100)}% Brasil).`
     : `Hoje: ${fmt(brPctNow)}% Brasil × meta ${fmt(t * 100)}%. O aporte corrige o desvio primeiro (sem vender nada).`);
 
+  // Câmbio é contexto, nunca regra mecânica (spec §19): a exposição internacional existe para
+  // diversificação e proteção cambial — o dólar subir ou cair não muda a divisão sozinho.
+  if (i.fxChange1m !== null && Math.abs(i.fxChange1m) >= 5) {
+    reasons.push(`Contexto: dólar ${i.fxChange1m > 0 ? "subiu" : "caiu"} ${Math.abs(i.fxChange1m).toFixed(1).replace(".", ",")}% no mês. Não muda a divisão automaticamente — sem market timing cambial.`);
+  }
+  // Onde o próximo real tem melhor relação risco/retorno (spec §13): o lado com mais ativos em
+  // faixa atrativa pelo valuation recebe um pouco mais.
+  const T = PARAMS.split;
   let tilt = 0;
-  if (i.fxChange1m !== null && i.fxChange1m >= 5) { tilt += 0.1; reasons.push(`Dólar subiu ${i.fxChange1m.toFixed(1).replace(".", ",")}% no mês: 10% a menos para o exterior neste mês (não é previsão — só evita concentrar compra num pico de curto prazo).`); }
-  if (i.fxChange1m !== null && i.fxChange1m <= -5) { tilt -= 0.1; reasons.push(`Dólar caiu ${Math.abs(i.fxChange1m).toFixed(1).replace(".", ",")}% no mês: 10% a mais para o exterior.`); }
   const oppDiff = i.brOpportunities - i.usOpportunities;
   if (oppDiff !== 0) {
-    const o = Math.max(-0.1, Math.min(0.1, oppDiff * 0.05));
-    tilt += o;
-    reasons.push(`${o > 0 ? "Brasil" : "Exterior"} tem mais ativos em faixa atrativa (${i.brOpportunities} × ${i.usOpportunities}): +${fmt(Math.abs(o) * 100)}% do aporte para esse lado.`);
+    tilt = Math.max(-T.opportunityTilt, Math.min(T.opportunityTilt, oppDiff * T.opportunityTiltPerAsset));
+    reasons.push(`${tilt > 0 ? "Brasil" : "Exterior"} tem mais ativos em faixa atrativa pelo valuation (${i.brOpportunities} × ${i.usOpportunities}): +${fmt(Math.abs(tilt) * 100)}% do aporte para esse lado.`);
   }
-  tilt = Math.max(-0.2, Math.min(0.2, tilt));
   br = Math.min(amt, Math.max(0, br + tilt * amt));
   const brBrl = r50(br);
   const usBrl = Math.max(0, r50(amt) - brBrl);

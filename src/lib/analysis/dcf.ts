@@ -1,17 +1,21 @@
+import { PARAMS } from "./params";
 import { median } from "./robust";
 
 /**
  * Fluxo de caixa descontado (DCF) simples por ação, em duas fases:
  * anos 1–5 crescendo a g, anos 6–10 convergindo linearmente para a perpetuidade,
- * e valor terminal (Gordon). Desconto = juro livre de risco + prêmio de risco.
+ * e valor terminal (Gordon). O fluxo é o FCF por ação (para o acionista) e a taxa é o
+ * custo de equity — fluxo e taxa consistentes (spec §10). A taxa vem dos juros de mercado,
+ * nunca escolhida para chegar a um preço.
  */
-export const TERMINAL_GROWTH = 0.025;
-export const EQUITY_PREMIUM = 0.05;
+export const TERMINAL_GROWTH = PARAMS.valuation.terminalGrowth;
+export const EQUITY_PREMIUM = PARAMS.valuation.equityPremium;
 
-/** Taxa de desconto: Treasury 10 anos + beta × prêmio de risco (7%–13%). */
+/** Custo de equity: Treasury 10 anos + beta (0,8–1,5) × prêmio de risco, dentro do intervalo de PARAMS. */
 export function discountRate(riskFreePct: number, beta: number | null): number {
   const b = Math.max(0.8, Math.min(1.5, beta ?? 1));
-  return Math.max(0.07, Math.min(0.13, riskFreePct / 100 + b * EQUITY_PREMIUM));
+  const [lo, hi] = PARAMS.valuation.discountRange;
+  return Math.max(lo, Math.min(hi, riskFreePct / 100 + b * EQUITY_PREMIUM));
 }
 
 export function dcfPerShare(fcf: number, g: number, r: number, terminal = TERMINAL_GROWTH): number {

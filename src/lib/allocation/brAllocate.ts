@@ -1,3 +1,4 @@
+import { PARAMS } from "../analysis/params";
 import type { ActionKey, Stance } from "../analysis/stance";
 import type { BrStrategy } from "../portfolio/brStrategy";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
@@ -10,7 +11,8 @@ export interface BrAllocation { amount: number; lines: BrAllocLine[]; classSplit
  * preço razoável) ou alta (oportunidade) recebe, e a alta recebe o dobro.
  * Esticados, tese em risco ou sem dados de valuation esperam.
  */
-const ACTION_WEIGHT: Partial<Record<ActionKey, number>> = { comprar: 2, recompra: 2, manter: 1 };
+const W = PARAMS.allocation.brWeights;
+const ACTION_WEIGHT: Partial<Record<ActionKey, number>> = { comprar: W.opportunity, recompra: W.opportunity, manter: W.normal };
 const r10 = (v: number) => Math.round(v / 10) * 10;
 
 /**
@@ -46,7 +48,7 @@ export function allocateBr(amount: number, summary: PortfolioLedgerSummary, stra
     const target = strategy.classes[c] / (enabled.length || 1);
     const cands = enabled.map((a) => {
       const v = stances.find((s) => s.code === a.code);
-      const w = v ? (v.stance.qualityPremium ? 0.5 : ACTION_WEIGHT[v.stance.action] ?? 0) : 0;
+      const w = v ? (v.stance.qualityPremium ? W.qualityPremium : ACTION_WEIGHT[v.stance.action] ?? 0) : 0;
       const weightNow = summary.holdings.find((h) => h.code === a.code)?.weight ?? 0;
       const under = target > 0 ? Math.max(0, target - weightNow) / target : 0;
       // Já na meta ou acima: espera (o aporte não concentra a carteira).

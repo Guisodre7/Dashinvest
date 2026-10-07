@@ -7,7 +7,8 @@ import { consensusView, estimateTrend, type ConsensusView, type EstimateTrend, t
 import { computeDrawdown, computeMomentum, type Drawdown, type Momentum } from "./indicators";
 import { newsSignal, rankNews, type ScoredNews } from "./news";
 import { FACTOR_KEYS, FACTOR_LABELS, type EngineSettings, type FactorKey } from "./settings";
-import { businessQuality, fairValueView, PE_CAP, valuationView, type BusinessQuality, type FairValueView, type ValuationView } from "./valuation";
+import { PARAMS } from "./params";
+import { businessQuality, fairValueView, valuationView, type BusinessQuality, type FairValueView, type ValuationView } from "./valuation";
 
 export interface StrategyRow {
   ticker: string;
@@ -522,7 +523,11 @@ export function accumulationZones(
     anchor = fv.mean * adj; basis = "fair-value"; anchorLabel = "fair value médio estimado";
   } else if (!isEtf && fv.estimates.length < 2 && f?.eps_ttm && f.eps_ttm > 0 && f.pe_5y_avg) {
     // Só quando faltam métodos — se os métodos existem mas conflitam, não há faixa.
-    anchor = f.eps_ttm * Math.min(f.pe_5y_avg, PE_CAP) * adj; basis = "historical-multiple"; anchorLabel = "preço implícito pelo P/L histórico";
+    // Base fraca (múltiplo histórico sozinho): só vale se o resultado for plausível frente ao preço;
+    // a postura trata essa base como incerteza alta (faixa de compra mais exigente).
+    const implied = f.eps_ttm * f.pe_5y_avg * adj;
+    const [lo, hi] = PARAMS.valuation.plausible;
+    if (price / implied >= lo && price / implied <= hi) { anchor = implied; basis = "historical-multiple"; anchorLabel = "preço implícito pelo P/L histórico"; }
   }
 
   const describe = (level: number) => {

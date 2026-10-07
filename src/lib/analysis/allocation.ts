@@ -2,6 +2,7 @@ import type { AssetAnalysis } from "./analyze";
 import type { EngineSettings } from "./settings";
 import { analystSignal } from "./analystSignal";
 import type { MarketMood } from "./macro";
+import { PARAMS } from "./params";
 import { ACTION_META, type ActionKey } from "./stance";
 
 export type Action = "COMPRAR" | "APORTE NORMAL" | "AGUARDAR";
@@ -27,6 +28,10 @@ export interface AllocationLine {
   confidence: "Alta" | "Média" | "Baixa";
   blocked: boolean;
   dataUsed: string[];
+  /** Alternativas consideradas e por que ficaram atrás (spec §13). */
+  alternatives?: string[];
+  /** O que faria a recomendação mudar (spec §13/§34). */
+  change?: string;
 }
 
 export interface AllocationResult {
@@ -70,7 +75,8 @@ const usd = (v: number) => `US$${fmt(v, 2)}`;
  * Motor de alocação do aporte mensal.
  * 1. Necessidade por desvio: quanto falta para cada ativo atingir o peso-alvo após o aporte.
  * 2. Multiplicador de oportunidade (0,25x–1,75x) a partir do Opportunity Score.
- * 3. Regras: AGUARDAR em deterioração de tese/mudança de tese; anti-FOMO reduz; earnings próximos reduzem.
+ * 3. Regras: AGUARDAR em deterioração de tese e quando o valuation pede espera; alta recente e
+ *    resultado próximo aparecem como risco explicado, sem corte automático (spec §7, §20, §23).
  * 4. Respeita peso máximo; nunca sugere venda.
  * 5. Caixa de oportunidade limitado por regra configurável.
  */
@@ -119,25 +125,18 @@ export function allocate(input: AllocationInput): AllocationResult {
       action = "AGUARDAR"; mult = 0;
       reasons.push("possível deterioração da tese");
     }
-    if (kinds.has("ANTI_FOMO") && action !== "AGUARDAR") {
-      mult *= 0.4;
-      reasons.push("forte expansão recente de preço");
-      if (value / Math.max(totalAfter, 1) >= tw) { action = "AGUARDAR"; mult = 0; }
-    }
-    if (kinds.has("EARNINGS_SOON") && action !== "AGUARDAR") {
-      mult *= a.daysToEarnings !== null && a.daysToEarnings <= 2 ? 0.5 : 0.8;
-      reasons.push("earnings próximos");
-    }
+    // "Subiu muito" não é sinônimo de caro e resultado próximo não é regra universal (spec §7, §20, §23):
+    // alta recente e earnings entram como risco explicado, não como corte automático do aporte.
     const st = input.stances?.[a.ticker];
     if (st && STANCE_WAIT.has(st) && action !== "AGUARDAR") {
       action = "AGUARDAR"; mult = 0;
       reasons.push(`valuation: ${ACTION_META[st].label.toLowerCase()} — não é momento de aumentar`);
     }
-    if ((st === "comprar" || st === "recompra") && mult > 0) mult *= input.mood?.mood === "medo" ? 2 : 1.4;
-    if (input.qualityPremium?.includes(a.ticker) && mult > 0) { mult *= 0.5; reasons.push("excelente, mas um pouco acima do valor justo: aporte menor"); }
+    if ((st === "comprar" || st === "recompra") && mult > 0) mult *= PARAMS.allocation.opportunityBoost;
+    if (input.qualityPremium?.includes(a.ticker) && mult > 0) { mult *= PARAMS.allocation.qualityPremiumFactor; reasons.push("excelente, mas um pouco acima do valor justo: aporte menor"); }
     // Analistas melhorando a visão puxam um pouco mais; piorando, um pouco menos.
     const sig = analystSignal(a.trend, a.analysts).score;
-    if (sig !== null && mult > 0) mult *= 1 + 0.25 * sig;
+    if (sig !== null && mult > 0) mult *= 1 + PARAMS.analysts.allocationWeight * sig;
     if (need <= 0) { action = action ?? "AGUARDAR"; reasons.push("acima do peso-alvo"); }
     return { a, need, mult, action, cap, blocked, reasons };
   });
@@ -149,13 +148,11 @@ export function allocate(input: AllocationInput): AllocationResult {
   const maxBalance = settings.maxOpportunityCashContributions * contribution;
   let cash = 0;
   let cashReason: string | null = null;
-  // Ritmo: com medo no mercado o aporte vai todo para quem está na faixa; com euforia, guarda mais.
-  const hasOpp = work.some((w) => { const st = input.stances?.[w.a.ticker]; return (st === "comprar" || st === "recompra") && w.mult > 0 && w.need > 0; });
-  // Medo só muda o ritmo se houver oportunidade de verdade para receber o dinheiro.
-  const mood = input.mood?.mood === "medo" && !hasOpp ? "normal" : input.mood?.mood ?? "normal";
-  const cashPct = mood === "medo" ? 0 : mood === "euforia" ? Math.min(0.5, settings.maxOpportunityCashPct * 1.5) : settings.maxOpportunityCashPct;
-  if (mood === "medo") notes.push(`Mercado com medo (${input.mood!.reasons.join(", ")}): momento de aportar tudo nas oportunidades, sem guardar caixa.`);
-  if (mood === "euforia" && waitingTargetShare > 0) notes.push(`Mercado eufórico (${input.mood!.reasons.join(", ")}): uma parte maior fica em caixa para comprar mais barato depois.`);
+  // Humor do mercado é contexto, não gatilho (spec §18): explicado, sem mudar valores automaticamente.
+  const mood = input.mood?.mood ?? "normal";
+  const cashPct = settings.maxOpportunityCashPct;
+  if (mood === "medo") notes.push(`Contexto: mercado com medo (${input.mood!.reasons.join(", ")}). Isso não muda a conta — oportunidades já aparecem pelo valuation; vale revisar se alguma tese mudou.`);
+  if (mood === "euforia") notes.push(`Contexto: mercado eufórico (${input.mood!.reasons.join(", ")}). Isso não muda a conta — o valuation já segura os ativos caros.`);
   if (waitingTargetShare > 0 && cashPct > 0) {
     const room = Math.max(0, maxBalance - input.existingOpportunityCash);
     cash = Math.min(contribution * cashPct, contribution * waitingTargetShare, room);
@@ -248,6 +245,17 @@ export function allocate(input: AllocationInput): AllocationResult {
   });
   const order: Record<Priority, number> = { ALTA: 0, "MÉDIA": 1, BAIXA: 2 };
   lines.sort((x, y) => order[x.priority] - order[y.priority] || y.amount - x.amount || (y.opportunityScore ?? 0) - (x.opportunityScore ?? 0));
+
+  // Spec §13/§34: alternativas consideradas e o que faria a recomendação mudar.
+  const waitWhy = new Map(work.map((w) => [w.a.ticker, w.reasons[w.reasons.length - 1] ?? "prioridade menor agora"]));
+  for (const l of lines) {
+    if (l.amount <= 0) continue;
+    const others = lines.filter((o) => o.ticker !== l.ticker && o.amount < l.amount);
+    l.alternatives = others.slice(0, 3).map((o) => o.amount > 0 ? `${o.ticker} (recebe menos: ${o.priority === "ALTA" ? "também oportunidade" : "aporte normal"})` : `${o.ticker} (${waitWhy.get(o.ticker)})`);
+    l.change = l.priority === "ALTA"
+      ? "Deixa de ser prioridade se o preço sair da faixa atrativa, os analistas passarem a cortar lucro ou a tese deteriorar."
+      : "Vira prioridade se o preço entrar na faixa atrativa; deixa de receber se ficar caro, a tese deteriorar ou o peso chegar à meta.";
+  }
 
   return {
     ...base,

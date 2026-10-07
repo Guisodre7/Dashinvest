@@ -43,7 +43,6 @@ export default function AllocationView({ result, cur = "US$" }: { result: Alloca
                 <div className="row-wrap">
                   <span className={ACTION_CLS[l.action]}>{l.action}</span>
                   <span className={PRIORITY_CLS[l.priority]}>Prioridade {l.priority}</span>
-                  {l.opportunityScore !== null && <span className="badge" title="Opportunity Score (0–100): atratividade do aporte AGORA dentro da carteira — não mede qual empresa é melhor">Score {n(l.opportunityScore, 0)}</span>}
                   <span className="badge">Confiança {l.confidence}</span>
                 </div>
                 <div className="small muted num right">
@@ -65,6 +64,22 @@ export default function AllocationView({ result, cur = "US$" }: { result: Alloca
                   <ul className="clean small">{l.risks.map((r) => <li key={r}>{r}</li>)}</ul>
                 </div>
               </div>
+              {(l.alternatives?.length || l.change) && (
+                <div className="proscons">
+                  {l.alternatives && l.alternatives.length > 0 && (
+                    <div>
+                      <div className="kpi-label">Alternativas consideradas</div>
+                      <ul className="clean small">{l.alternatives.map((a) => <li key={a}>{a}</li>)}</ul>
+                    </div>
+                  )}
+                  {l.change && (
+                    <div>
+                      <div className="kpi-label">O que faria mudar</div>
+                      <p className="small" style={{ margin: 0 }}>{l.change}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </details>
         ))}

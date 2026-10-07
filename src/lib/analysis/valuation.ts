@@ -1,6 +1,7 @@
 import type { AnalystData, Fundamentals } from "../market/types";
 import { baseGrowth, dcfPerShare, discountRate, impliedGrowth } from "./dcf";
 import type { EstimateTrend } from "./estimates";
+import { PARAMS } from "./params";
 import { robustRange } from "./robust";
 
 export interface ValuationView {
@@ -69,10 +70,10 @@ export function valuationView(f: Fundamentals | null, trend: EstimateTrend | nul
   return v;
 }
 
-/** Teto do P/L histórico usado no valor justo (crescimento passado não se repete para sempre). */
-export const PE_CAP = 35;
-/** Preço ÷ valor justo fora desta faixa = dado não confiável. */
-const PLAUSIBLE = [0.55, 2] as const;
+/** Bancos, seguradoras e financeiras: modelo próprio (spec §9) — sem DCF de FCF nem dívida/patrimônio. */
+export function isFinancial(f: Pick<Fundamentals, "sector"> | null | undefined): boolean {
+  return !!f?.sector && /bank|banc|financ|insur|segur|capital markets|credit services|asset management/i.test(f.sector);
+}
 
 export interface FairValueEstimate {
   method: string;
@@ -97,6 +98,10 @@ export interface FairValueView {
   /** FCF por ação e taxa de desconto usados no DCF (para refazer o DCF reverso a outro preço). */
   fcf_per_share?: number | null;
   discount_rate?: number | null;
+  /** DCF em cenários (spec §10: intervalo, sensibilidade). */
+  scenarios?: { pessimist: number; base: number; optimist: number } | null;
+  /** Empresa financeira (banco/seguradora): modelo setorial próprio. */
+  financial?: boolean;
 }
 
 /**
@@ -116,15 +121,34 @@ export function fairValueView(
   });
   if (isEtf) return empty("Fair value não se aplica a ETFs — avalie yield, duration e composição.");
   const est: FairValueEstimate[] = [];
+  const financial = isFinancial(f);
 
-  // P/L de referência: histórico da própria empresa (mediana anual), com teto. Anos de
-  // lucro deprimido inflam a média (ex.: NVDA) e levariam a um "valor justo" irreal.
-  const refPe = f?.pe_5y_avg ? Math.min(f.pe_5y_avg, PE_CAP) : null;
-  const capped = !!f?.pe_5y_avg && f.pe_5y_avg > PE_CAP;
+  // A) Fluxo de caixa descontado (FCFE descontado ao custo de equity — fluxo e taxa consistentes,
+  // spec §10), com juros de 10 anos no desconto. Cenários pessimista/base/otimista pelo crescimento.
+  // Bancos e seguradoras não entram: fluxo de caixa livre não descreve o negócio (spec §9).
+  const fcfPs = f?.fcf_per_share && f.fcf_per_share > 0 ? f.fcf_per_share : price && f?.pfcf && f.pfcf > 0 ? price / f.pfcf : null;
+  const g = baseGrowth([f?.fcf_growth, f?.eps_growth_3y, f?.revenue_growth_3y, trend?.expected_eps_growth]);
+  let implied: number | null = null, r: number | null = null, dcfBase: number | null = null;
+  let scenarios: FairValueView["scenarios"] = null;
+  if (!financial && fcfPs && g !== null && riskFreePct !== null) {
+    r = discountRate(riskFreePct, f?.beta ?? null);
+    const d = PARAMS.valuation.scenarioGrowthDelta;
+    dcfBase = dcfPerShare(fcfPs, g, r);
+    scenarios = { pessimist: dcfPerShare(fcfPs, Math.max(0, g - d), r), base: dcfBase, optimist: dcfPerShare(fcfPs, g + d, r) };
+    est.push({ method: "Fluxo de caixa descontado", value: dcfBase, source: `${f!.meta.source} + FRED` });
+    implied = price ? impliedGrowth(price, fcfPs, r) : null;
+  }
+
+  // B) Múltiplo de referência: P/L histórico da própria empresa (mediana anual), limitado ao P/L
+  // que o crescimento e os juros dela justificam (DCF ÷ lucro) — não um teto universal (spec §10).
+  const justifiedPe = dcfBase && f?.eps_ttm && f.eps_ttm > 0 ? dcfBase / f.eps_ttm : null;
+  const refPe = f?.pe_5y_avg ? (justifiedPe ? Math.min(f.pe_5y_avg, justifiedPe) : f.pe_5y_avg) : null;
+  const limited = !!(f?.pe_5y_avg && justifiedPe && justifiedPe < f.pe_5y_avg);
+  const peLabel = refPe ? `P/L ${refPe.toFixed(0)}x${limited ? " (limitado pelo crescimento)" : " (histórico)"}` : "";
   // 1) EPS do ano fiscal corrente (não o ano seguinte — evita somar otimismo) × P/L de referência.
   const fwdEps = trend?.eps_fy0 ?? (price && f?.forward_pe ? price / f.forward_pe : null);
   if (fwdEps && fwdEps > 0 && refPe) {
-    est.push({ method: `EPS estimado do ano × P/L histórico ${refPe.toFixed(0)}x${capped ? " (teto)" : ""}`, value: fwdEps * refPe, source: `${f!.meta.source} (múltiplos) + estimativas` });
+    est.push({ method: `EPS estimado do ano × ${peLabel}`, value: fwdEps * refPe, source: `${f!.meta.source} (múltiplos) + estimativas` });
   }
   // 2) Preço-alvo médio de analistas (horizonte 12 meses — não é fair value intrínseco).
   if (analysts?.target_mean) {
@@ -132,20 +156,9 @@ export function fairValueView(
   }
   // 3) EPS dos últimos 12 meses × P/L de referência (base realizada, não projetada).
   if (f?.eps_ttm && f.eps_ttm > 0 && refPe) {
-    est.push({ method: `EPS 12m × P/L histórico ${refPe.toFixed(0)}x${capped ? " (teto)" : ""}`, value: f.eps_ttm * refPe, source: f.meta.source });
+    est.push({ method: `EPS 12m × ${peLabel}`, value: f.eps_ttm * refPe, source: f.meta.source });
   }
-
-  // 4) Fluxo de caixa descontado, com juros de 10 anos no desconto (juro alto = valor menor).
-  // FCF/ação do próprio fornecedor (mesmo instante do P/FCF); senão, preço ÷ P/FCF.
-  const fcfPs = f?.fcf_per_share && f.fcf_per_share > 0 ? f.fcf_per_share : price && f?.pfcf && f.pfcf > 0 ? price / f.pfcf : null;
-  const g = baseGrowth([f?.fcf_growth, f?.eps_growth_3y, f?.revenue_growth_3y, trend?.expected_eps_growth]);
-  let implied: number | null = null, r: number | null = null;
-  if (fcfPs && g !== null && riskFreePct !== null) {
-    r = discountRate(riskFreePct, f?.beta ?? null);
-    est.push({ method: "Fluxo de caixa descontado", value: dcfPerShare(fcfPs, g, r), source: `${f!.meta.source} + FRED` });
-    implied = impliedGrowth(price!, fcfPs, r);
-  }
-  const extra = { implied_growth: implied, base_growth: g, fcf_per_share: fcfPs, discount_rate: r };
+  const extra = { implied_growth: implied, base_growth: g, fcf_per_share: fcfPs, discount_rate: r, scenarios, financial };
 
   if (est.length < 2) {
     return { ...empty(est.length === 1 ? "Fair value indisponível — apenas uma estimativa encontrada (mínimo 2)." : "Fair value indisponível."), estimates: est, ...extra };
@@ -154,7 +167,8 @@ export function fairValueView(
   const rr = robustRange(est.map((e) => e.value));
   const mean = rr.mid, min = rr.low, max = rr.high;
   const spread = rr.spread * 100;
-  if (spread > 80) {
+  const PLAUSIBLE = PARAMS.valuation.plausible;
+  if (spread > PARAMS.valuation.maxMethodSpread * 100) {
     return { ...empty("Os dados disponíveis são conflitantes — estimativas de fair value divergem mais de 80%."), estimates: est, min, mean, max, uncertainty_pct: spread, ...extra };
   }
   // Desconto/prêmio extremo em empresa grande quase sempre é dado ruim, não oportunidade.
@@ -210,6 +224,8 @@ export function businessQuality(f: Fundamentals | null): BusinessQuality {
     m("current_ratio", "Liquidez corrente", f?.current_ratio ?? null, "x", 1.5, 1),
     m("shares_change", "Variação de ações em circulação (a/a)", f?.shares_change_yoy ?? null, "%", -1, 1, false),
   ];
+  // Bancos/seguradoras: alavancagem e liquidez corrente não medem qualidade (spec §9) — ficam fora.
+  if (isFinancial(f)) for (const m of metrics) if (m.key === "debt_to_equity" || m.key === "current_ratio" || m.key === "fcf_yield" || m.key === "fcf_growth") m.assessment = "sem dado";
   const scored = metrics.filter((x) => x.assessment !== "sem dado");
   const pts = { forte: 100, adequado: 60, fraco: 20, "sem dado": 0 } as const;
   return {

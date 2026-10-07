@@ -5,6 +5,7 @@ import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
 import SourceLinks from "@/components/SourceLinks";
+import ValueRange from "@/components/ValueRange";
 import StanceCard from "@/components/StanceCard";
 import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
@@ -67,6 +68,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       detail: (
         <>
           {stance ? <StanceCard s={stance} price={a.price} name={a.name} compact href={`/ativo/${encodeURIComponent(a.ticker)}#realizacao`} /> : <p className="small faint">Sem faixa de valuation (dados insuficientes).</p>}
+          {!a.isEtf && !a.strategy.is_legacy && (
+            <ValueRange cur="US$" price={a.price} low={a.fairValue.available ? a.fairValue.min : null} mid={a.fairValue.available ? a.fairValue.mean : null} high={a.fairValue.available ? a.fairValue.max : null}
+              scenarios={a.fairValue.scenarios} methods={a.fairValue.estimates.map((e) => ({ label: e.method, value: e.value }))} confidence={a.confidence.level} note={a.fairValue.reason} />
+          )}
           {a.signals.filter((x) => x.kind !== "STALE_DATA").length > 0 && (
             <ul className="clean xsmall">{a.signals.filter((x) => x.kind !== "STALE_DATA").slice(0, 3).map((x) => <li key={x.kind} className={x.tone === "positive" ? "pos" : x.tone === "negative" ? "neg" : "muted"}>{x.title}</li>)}</ul>
           )}

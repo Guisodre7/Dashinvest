@@ -3,7 +3,7 @@ import type { Quote } from "../market/types";
 import type { BrStrategy } from "../portfolio/brStrategy";
 import type { LedgerEntry, PortfolioLedgerSummary } from "../portfolio/ledger";
 import { brFair, brQuality } from "./brValuation";
-import { computeStance, type Stance } from "./stance";
+import { computeStance, type Stance, type StanceInput } from "./stance";
 import type { TaxSettings } from "./stanceInput";
 
 export interface BrStanceView {
@@ -14,6 +14,8 @@ export interface BrStanceView {
   price: number | null;
   fundamentals: BrFundamentals | null;
   methods: { label: string; value: number }[];
+  /** Intervalo de valor econômico (mín–mediana–máx dos métodos). */
+  fair: StanceInput["fair"];
   fairReason: string | null;
   qualityNotes: string[];
 }
@@ -69,5 +71,5 @@ export function brStanceOne(
       tax: cls === "fii" ? tax.BR_FII : tax.BR_ACAO, currency: "R$",
     });
     if (!fair && reason) stance.reasons.push(reason);
-    return { stance, code, assetClass: cls, name: asset?.name ?? h?.name ?? f?.name ?? null, price, fundamentals: f, methods, fairReason: reason, qualityNotes: q.notes };
+    return { stance, code, assetClass: cls, name: asset?.name ?? h?.name ?? f?.name ?? null, price, fundamentals: f, methods, fair, fairReason: reason, qualityNotes: q.notes };
 }

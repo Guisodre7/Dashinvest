@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analystSignal } from "@/lib/analysis/analystSignal";
-import { brFair } from "@/lib/analysis/brValuation";
+import { brFair, brQuality, fiiKind } from "@/lib/analysis/brValuation";
 import { dcfPerShare, discountRate, impliedGrowth } from "@/lib/analysis/dcf";
 import { marketMood } from "@/lib/analysis/macro";
 import { computeStance, DEFAULT_TAX, type StanceInput } from "@/lib/analysis/stance";
@@ -30,6 +30,17 @@ describe("Brasil: juros do Banco Central no valuation", () => {
     expect(v.methods.map((m) => m.label)).toContain("P/VP justificado pelo ROE");
     const pvp = v.methods.find((m) => m.label === "P/VP justificado pelo ROE")!.value / 18;
     expect(pvp).toBeGreaterThan(1.5); // ROE 23% vale bem mais que o patrimônio
+  });
+
+  it("modelos setoriais (spec §9 e §11): banco sem dívida/ROIC; FII de papel sem modelo de tijolo", () => {
+    const banco = { kind: "acao", sector: "Intermediários Financeiros", roe: 22, roic: 3, grossDebtToEquity: 8, revenueGrowth5y: 15, netMargin: 30 } as BrFundamentals;
+    const q = brQuality(banco);
+    expect(q.score).toBe(100); // ROE e crescimento bons; dívida/patrimônio e ROIC ignorados
+    expect(q.notes.join(" ")).toMatch(/CET1/);
+    const papel = { kind: "fii", segment: "Títulos e Val. Mob.", vacancy: 40, properties: 0 } as BrFundamentals;
+    expect(brQuality(papel)).toMatchObject({ score: null, coverage: 0 });
+    expect(fiiKind(papel)).toBe("papel");
+    expect(fiiKind({ segment: "Logística" })).toBe("tijolo");
   });
 
   it("FII: VP/cota + renda pelo juro real", () => {

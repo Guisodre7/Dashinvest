@@ -60,20 +60,37 @@ describe("fair value", () => {
   });
 
   // Caso real NVDA: P/L histórico inflado por anos de lucro baixo + EPS do ano fiscal seguinte
-  // levavam a "-64% (compra forte)". Agora: EPS do ano corrente, P/L com teto e mediana dos métodos.
-  const f = { pe_5y_avg: 60, eps_ttm: 4.5, forward_pe: null, meta: meta() } as never;
+  // levavam a "-64% (compra forte)". Agora (spec §10): EPS do ano corrente, P/L histórico limitado
+  // pelo P/L que o crescimento e os juros da empresa justificam (DCF), e mediana dos métodos.
+  const f = { pe_5y_avg: 60, eps_ttm: 4.5, forward_pe: null, fcf_per_share: 6, fcf_growth: 15, eps_growth_3y: 15, revenue_growth_3y: 15, beta: 1.2, sector: "Semiconductors", meta: meta() } as never;
   const trend = { eps_fy0: 6, eps_current: 9 } as never;
   const analysts = { target_mean: 230, meta: meta() } as never;
-  it("P/L histórico tem teto e o valor justo é a mediana dos métodos", () => {
-    const fv = fairValueView(185, f, trend, analysts, false);
-    expect(fv.estimates.map((e) => Math.round(e.value))).toEqual([210, 230, 158]); // 6×35, alvo, 4,5×35
-    expect(fv.mean).toBe(210);
-    expect(fv.discount_pct!).toBeGreaterThan(-15);
+  it("múltiplo limitado pelo crescimento (não teto universal), cenários e mediana", () => {
+    const fv = fairValueView(185, f, trend, analysts, false, 4.2);
+    const dcf = fv.estimates.find((e) => e.method === "Fluxo de caixa descontado")!.value;
+    const pe = dcf / 4.5;
+    expect(pe).toBeLessThan(60);
+    expect(fv.estimates.find((e) => e.method.startsWith("EPS 12m"))!.value).toBeCloseTo(4.5 * pe, 4);
+    expect(fv.estimates.some((e) => /teto/.test(e.method))).toBe(false);
+    expect(fv.scenarios!.pessimist).toBeLessThan(fv.scenarios!.base);
+    expect(fv.scenarios!.optimist).toBeGreaterThan(fv.scenarios!.base);
+    expect(fv.available).toBe(true);
   });
-  it("desconto implausível não vira faixa de compra", () => {
-    const fv = fairValueView(90, f, trend, analysts, false);
+  it("fluxo de caixa e analistas muito divergentes → dados conflitantes, sem faixa (spec §22)", () => {
+    const fv = fairValueView(185, { ...(f as object), fcf_per_share: 3.5 } as never, trend, analysts, false, 4.2);
+    expect(fv.available).toBe(false);
+    expect(fv.reason).toMatch(/conflitantes/);
+  });
+  it("sem DCF, usa o P/L histórico da própria empresa — e desconto implausível não vira faixa", () => {
+    const fv = fairValueView(90, { ...(f as object), fcf_per_share: null, pfcf: null } as never, trend, analysts, false, 4.2);
+    expect(fv.estimates.some((e) => e.method.includes("histórico"))).toBe(true);
     expect(fv.available).toBe(false);
     expect(fv.reason).toMatch(/longe demais/);
+  });
+  it("bancos/seguradoras: sem fluxo de caixa livre (spec §9)", () => {
+    const fv = fairValueView(185, { ...(f as object), sector: "Banks" } as never, trend, analysts, false, 4.2);
+    expect(fv.financial).toBe(true);
+    expect(fv.estimates.some((e) => e.method === "Fluxo de caixa descontado")).toBe(false);
   });
 });
 
@@ -140,15 +157,27 @@ describe("motor de alocação", () => {
     expect(lb.priority).toBe("MÉDIA");
   });
 
-  it("ritmo pelo humor do mercado: medo aporta tudo; euforia guarda mais caixa", () => {
+  it("humor do mercado é contexto, não gatilho (spec §18): explica, mas não muda os valores", () => {
     const bad = analyzeAsset(input("A", flatThenDrop, { estimates: est(-5, -10), currentWeight: 40, targetWeight: 50 }), settings);
     const ok = analyzeAsset(input("B", flat, { currentWeight: 60, targetWeight: 50 }), settings);
-    const run = (mood: "medo" | "normal" | "euforia", stances: Record<string, "comprar" | "manter"> = { B: "comprar" }) =>
-      allocate({ contribution: 600, analyses: [bad, ok], values: { A: 400, B: 600 }, existingOpportunityCash: 0, settings, mood: { mood, reasons: ["teste"] }, stances });
-    expect(run("medo").opportunityCash).toBe(0);
-    // Medo sem nenhuma oportunidade de fato: não despeja o caixa em quem não está barato.
-    expect(run("medo", { B: "manter" }).opportunityCash).toBe(run("normal", { B: "manter" }).opportunityCash);
-    expect(run("euforia").opportunityCash).toBeGreaterThan(run("normal").opportunityCash);
+    const run = (mood: "medo" | "normal" | "euforia") =>
+      allocate({ contribution: 600, analyses: [bad, ok], values: { A: 400, B: 600 }, existingOpportunityCash: 0, settings, mood: { mood, reasons: ["teste"] }, stances: { B: "comprar" } });
+    const normal = run("normal");
+    for (const m of ["medo", "euforia"] as const) {
+      const r = run(m);
+      expect(r.opportunityCash).toBe(normal.opportunityCash);
+      expect(r.lines.map((l) => l.amount)).toEqual(normal.lines.map((l) => l.amount));
+      expect(r.notes.join(" ")).toMatch(/não muda a conta/);
+    }
+  });
+
+  it("explica alternativas e o que faria mudar (spec §13)", () => {
+    const a = analyzeAsset(input("A", flat, { currentWeight: 30, targetWeight: 50 }), settings);
+    const b = analyzeAsset(input("B", flat, { currentWeight: 70, targetWeight: 50 }), settings);
+    const r = allocate({ contribution: 600, analyses: [a, b], values: { A: 3000, B: 7000 }, existingOpportunityCash: 0, settings, stances: { A: "comprar", B: "nao_aumentar" } });
+    const la = r.lines.find((l) => l.ticker === "A")!;
+    expect(la.alternatives!.join(" ")).toMatch(/B/);
+    expect(la.change).toMatch(/faixa atrativa/);
   });
 
   it("não acumula caixa além do limite", () => {

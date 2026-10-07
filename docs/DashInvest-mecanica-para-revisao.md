@@ -1,5 +1,7 @@
 # DashInvest — mecânica completa para revisão
 
+> **Versão 2** — atualizada para seguir `DASHINVEST_MASTER_SPEC.md` (a especificação manda em caso de conflito).
+
 > **Para o ChatGPT:** este documento descreve, com números e regras exatas, como o meu painel de investimentos decide **onde aportar, quando comprar e quando vender parte de uma posição**. Você já conhece a minha filosofia de investimento e as minhas teses pelas nossas conversas. Quero que você:
 > 1. avalie se o fluxo é **confiável e coerente** com a minha filosofia (médio e longo prazo, valuation, nunca day trade);
 > 2. aponte **erros de lógica, premissas frágeis ou parâmetros mal calibrados** (cite a seção e o número);
@@ -31,7 +33,7 @@ Duas carteiras, mesma lógica e mesma tela:
 
 - "Adicionar ao meu radar" (na tela do ativo e no Analisar) coloca um ativo novo numa classe existente; a meta da classe é redividida.
 - Ativo fora do radar não entra no cálculo do aporte.
-- **Divisão mensal Brasil × Exterior** (Visão geral): o aporte corrige primeiro o desvio da meta entre as duas carteiras. Se o dólar subiu ≥ 5% no mês, vai 10% a menos para o exterior (caiu ≥ 5% → 10% a mais). O lado com mais ativos em faixa atrativa recebe até 10% a mais.
+- **Divisão mensal Brasil × Exterior** (Visão geral): o aporte corrige primeiro o desvio da meta entre as duas carteiras. O lado com mais ativos em faixa atrativa pelo valuation recebe até 10% a mais. O câmbio aparece só como contexto — sem market timing cambial (spec §19).
 
 ## 3. Fontes de dados (todas gratuitas)
 
@@ -65,16 +67,18 @@ O valor justo é a **mediana robusta** de vários métodos independentes:
 - se os métodos restantes divergem > 80%, o sistema **não mostra faixa** ("dados conflitantes").
 
 ### 5.1 EUA (ações; ETFs não têm valor justo)
-1. **EPS estimado do ano fiscal corrente × P/L histórico**. O P/L histórico é a **mediana** dos P/L anuais dos últimos 5 anos, com **teto de 35x** (evita que anos de lucro deprimido inflem o múltiplo — foi o erro que fazia a NVDA aparecer "−64%").
+1. **EPS estimado do ano fiscal corrente × P/L de referência**. O P/L de referência é a **mediana** dos P/L anuais dos últimos 5 anos, **limitada pelo P/L que o crescimento e os juros da própria empresa justificam** (valor do DCF ÷ lucro) — não um teto universal (spec §10).
 2. **Preço-alvo médio dos analistas (12 meses).**
-3. **EPS dos últimos 12 meses × P/L histórico** (mesmo teto).
+3. **EPS dos últimos 12 meses × P/L de referência** (mesmo limite).
 4. **Fluxo de caixa descontado (DCF)**:
    - FCF por ação = (valor de mercado ÷ P/FCF) ÷ ações em circulação;
    - crescimento base = mediana de [crescimento do FCF 5 anos, EPS 3 anos, receita 3 anos, crescimento esperado de EPS], limitado a 0%–20% ao ano;
    - anos 1–5 com esse crescimento, anos 6–10 convergindo para 2,5%, perpetuidade de 2,5%;
-   - desconto = Treasury 10 anos + beta (0,8–1,5) × 5% de prêmio de risco, limitado a 7%–13%.
+   - desconto (custo de equity, consistente com o fluxo para o acionista) = Treasury 10 anos + beta (0,8–1,5) × 5% de prêmio de risco, limitado a 7%–13%;
+   - cenários pessimista/base/otimista: crescimento −5 / 0 / +5 p.p.;
+   - bancos e seguradoras não usam DCF de fluxo de caixa livre (spec §9).
 5. **Trava de plausibilidade:** se preço ÷ valor justo < 0,55 ou > 2,0, o sistema não mostra faixa (desconto/prêmio extremo em empresa grande quase sempre é dado ruim).
-6. Fallback (só se faltarem métodos): EPS 12m × P/L histórico (com teto), marcado como "confiança menor".
+6. Fallback (só se faltarem métodos): EPS 12m × P/L histórico, só se plausível, tratado como incerteza alta.
 
 ### 5.2 Brasil
 Os métodos de perpetuidade usam o **juro real de longo prazo** = média entre o juro real atual ((1 + Selic) ÷ (1 + IPCA 12m) − 1) e o **juro neutro estimado pelo BC (~5% real)**. Motivo: a Selic de pico não dura 10 anos; usá-la como perpetuidade condena qualquer empresa de qualidade.
@@ -152,12 +156,11 @@ Faixas em relação ao valor justo (VJ):
    - surpresa de lucro 4; eventos 4; upside do alvo 4;
    - distância da máxima 3; volatilidade 3; risco 3; consenso 3;
    - dispersão dos alvos 2.
-3. **Ajustes ao multiplicador:**
-   - compra/recompra ×1,4 (×2 com medo no mercado);
+3. **Ajustes ao multiplicador** (todos em `PARAMS`, provisórios até backtest — spec §23):
+   - compra/recompra pelo valuation ×1,4;
    - sinal dos analistas ×(1 + 0,25 × sinal);
    - excelente e um pouco cara ×0,5;
-   - alta forte recente (anti-FOMO) ×0,4;
-   - resultado trimestral em ≤ 2 dias ×0,5; em ≤ 7 dias ×0,8.
+   - alta recente e resultado próximo **não** cortam o aporte: aparecem como risco explicado.
 4. **Esperam (não recebem):** caro, realização, tese em risco ou acima da meta.
 5. **Distribuição:** proporcional a necessidade × multiplicador, limitada ao peso máximo e a 1,5× a necessidade.
 6. **Ordem mínima:** US$ 10; valores menores são redistribuídos.
@@ -173,12 +176,9 @@ Faixas em relação ao valor justo (VJ):
 3. **Classe sem candidato:** a parte dela vai para a caixa de oportunidade.
 4. **Arredondamento:** valores em R$ 10; linhas abaixo de R$ 50 são somadas às outras.
 
-### 8.4 Ritmo pelo humor do mercado (só EUA)
-- **Medo:** pelo menos 2 sinais entre VIX ≥ 25, spread high yield ≥ 5%, incerteza política ≥ 1,5× a mediana de 1 ano e S&P ≤ −8% no mês; ou VIX ≥ 32 sozinho.
-  - Efeito: sem caixa de oportunidade, e as oportunidades ganham mais. Só vale se existir oportunidade de fato.
-- **Euforia:** pelo menos 2 sinais entre VIX ≤ 14, spread ≤ 3% e S&P ≥ +15% em 6 meses, sem nenhum sinal de medo.
-  - Efeito: o caixa de oportunidade sobe para até 30%.
-- **O humor nunca muda o valor justo**, só o ritmo.
+### 8.4 Humor do mercado (só EUA) — contexto, não gatilho (spec §18)
+- VIX, spread de crédito, incerteza política e queda do S&P viram uma linha de **contexto** no resultado do aporte.
+- **Não mudam valores nem o caixa de oportunidade.** As oportunidades já aparecem pelo valuation.
 
 ### 8.5 Travas de segurança
 - Aporte bloqueado se mais da metade dos ativos está sem cotação ou com cotação de **mais de 4 dias**.
