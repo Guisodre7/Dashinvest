@@ -2,20 +2,24 @@
 import { allocate, type AllocationResult } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { setCycleCapital } from "@/lib/data/cycleCapital";
 import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
+import { parseMoneyInput } from "@/lib/userNumber";
 
 export interface ContributionState {
   result: AllocationResult | null;
   error: string | null;
 }
 
-/** Calcula a distribuição do aporte. Nunca executa ordens — apenas recomenda. */
+/**
+ * Calcula a distribuição do capital disponível NESTE ciclo — exatamente o valor informado,
+ * sem padrão, piso, teto ou normalização para a faixa histórica. Nunca executa ordens.
+ */
 export async function calculateContribution(_prev: ContributionState, formData: FormData): Promise<ContributionState> {
   const user = await requireUser();
-  const raw = String(formData.get("amount") ?? "").replace(/\./g, "").replace(",", ".");
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
-    return { result: null, error: "Informe um valor de aporte válido em US$." };
+  const amount = parseMoneyInput(String(formData.get("amount") ?? ""));
+  if (amount === null || !Number.isFinite(amount) || amount <= 0) {
+    return { result: null, error: "Informe o capital disponível neste ciclo, em US$." };
   }
   // Cálculo do aporte sempre com dados novos (a validade das cotações é decisiva aqui).
   const ctx = await loadContext(user, { fresh: true });
@@ -35,6 +39,7 @@ export async function calculateContribution(_prev: ContributionState, formData: 
     qualityPremium: qualityPremiumOf(stances),
     mood: ctx.mood,
   });
+  await setCycleCapital(ctx.repo, "US", amount);
   try {
     await ctx.repo.saveRecommendation(result);
   } catch {

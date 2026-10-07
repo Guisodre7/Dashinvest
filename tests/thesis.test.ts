@@ -77,6 +77,16 @@ describe("números digitados", async () => {
     expect(parseUserNumber("1.234.567")).toBe(1234567);
     expect(parseUserNumber("R$ 500")).toBe(500);
     expect(parseUserNumber("")).toBeNull();
+    expect(parseUserNumber("2.345")).toBe(2.345); // cotas fracionárias continuam decimais
+  });
+  it("valor de aporte: '10.000' é dez mil, não dez", async () => {
+    const { parseMoneyInput } = await import("@/lib/userNumber");
+    expect(parseMoneyInput("10.000")).toBe(10000);
+    expect(parseMoneyInput("R$ 5.000")).toBe(5000);
+    expect(parseMoneyInput("1.250.000")).toBe(1250000);
+    expect(parseMoneyInput("600")).toBe(600);
+    expect(parseMoneyInput("550,50")).toBe(550.5);
+    expect(parseMoneyInput("182.57")).toBe(182.57);
   });
   it("ativo fora da estratégia: sem comparação com meta 0%", () => {
     const st = computeStance({ ticker: "NU", isEtf: false, isLegacy: false, price: 13, fair: { low: 14, mean: 16, high: 18, basis: "fair-value" }, qualityScore: 80, qualityCoverage: 1, signalKinds: [], estimates: { direction: "rising", significantCut: false, epsRev90d: 4 }, priceChange6m: 0, weight: 0, target: 0, maxWeight: null, position: null, lastSell: null, tax: DEFAULT_TAX.US, currency: "US$" });

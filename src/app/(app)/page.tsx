@@ -13,7 +13,9 @@ import { AlertsList, RadarTable } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { getCycleCapital, setCycleCapital } from "@/lib/data/cycleCapital";
 import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
+import { parseMoneyInput } from "@/lib/userNumber";
 import { dateBr, pct, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 
@@ -41,16 +43,18 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Só o que a aba precisa é calculado.
   const needsAllocation = tab === "resumo" || tab === "aporte";
-  const [savedAmount, previous, st] = await Promise.all([
-    needsAllocation ? ctx.repo.getSetting<number>("default_contribution").catch(() => null) : null,
+  const [cycle, previous, st] = await Promise.all([
+    needsAllocation ? getCycleCapital(ctx.repo, "US") : null,
     tab === "aporte" ? ctx.repo.getLatestRecommendation().catch(() => null) : null,
     needsAllocation ? loadStances(ctx, ctx.repo) : null,
   ]);
-  // Valor vindo do plano mensal (Visão geral) tem prioridade sobre o padrão salvo.
-  const fromPlan = Number(String(valor ?? "").replace(",", "."));
-  const defaultAmount = Number.isFinite(fromPlan) && fromPlan > 0 ? Math.round(fromPlan * 100) / 100 : savedAmount ?? 550;
-  const preview = needsAllocation ? allocate({
-    contribution: defaultAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
+  // Capital disponível NESTE ciclo: o valor vindo do plano mensal (Visão geral) ou o já informado
+  // neste mês. Sem valor padrão, piso ou teto — a faixa de aportes do perfil é só contexto (spec §2).
+  const fromPlan = parseMoneyInput(valor);
+  const cycleAmount = fromPlan && fromPlan > 0 ? Math.round(fromPlan * 100) / 100 : cycle?.amount ?? null;
+  if (needsAllocation && fromPlan && fromPlan > 0 && fromPlan !== cycle?.amount) await setCycleCapital(ctx.repo, "US", fromPlan);
+  const preview = needsAllocation && cycleAmount ? allocate({
+    contribution: cycleAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
     existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
     stances: st ? stanceActions(st.stances) : undefined, qualityPremium: st ? qualityPremiumOf(st.stances) : undefined, mood: ctx.mood,
@@ -111,14 +115,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
           <section className="section grid grid-2">
             <div className="card stack">
-              <div className="row-between"><h3>Próximo aporte ({usd(defaultAmount, 0)})</h3><Link href="/?aba=aporte" scroll={false} className="small">Calcular →</Link></div>
+              <div className="row-between"><h3>Próximo aporte{cycleAmount ? ` (${usd(cycleAmount, 0)})` : ""}</h3><Link href="/?aba=aporte" scroll={false} className="small">{cycleAmount ? "Ver divisão →" : "Informar capital →"}</Link></div>
               {preview && preview.lines.filter((l) => l.amount > 0).length ? (
                 <ul className="decision-list">
                   {preview.lines.filter((l) => l.amount > 0).slice(0, 4).map((l) => (
                     <li key={l.ticker}><span className="ticker">{l.ticker}</span><span className="small">{l.action}</span><strong className="num">{usd(l.amount)}</strong></li>
                   ))}
                 </ul>
-              ) : <p className="small faint">{preview?.blocked ? `Aporte bloqueado: ${preview.blockReasons[0] ?? "dados insuficientes"}` : "Sem sugestão de compra com os dados atuais."}</p>}
+              ) : <p className="small faint">{!cycleAmount ? "Capital disponível deste ciclo ainda não informado — informe quanto tem para aportar e o painel divide pela melhor relação risco/retorno." : preview?.blocked ? `Aporte bloqueado: ${preview.blockReasons[0] ?? "dados insuficientes"}` : "Sem sugestão de compra com os dados atuais."}</p>}
             </div>
             <div className="card stack">
               <div className="row-between"><h3>Alertas importantes</h3><Link href="/?aba=alertas" scroll={false} className="small">Todos ({alertCount}) →</Link></div>
@@ -142,7 +146,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       {tab === "aporte" && (
         <section className="section stack">
-          <div className="card"><ContributionForm defaultAmount={defaultAmount} previous={previous} /></div>
+          <div className="card"><ContributionForm defaultAmount={cycleAmount} previous={previous} /></div>
           <div className="section-head"><h2>Onde aportar</h2><span className="xsmall faint">todo o radar · toque no ativo para ver o valuation</span></div>
           {preview?.blocked && <div className="banner banner-warn small">{preview.blockReasons.join(" ")}</div>}
           <WhereBoard rows={board} />

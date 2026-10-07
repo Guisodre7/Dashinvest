@@ -11,8 +11,8 @@ import { loadContext, loadSettings } from "@/lib/data/load";
 export default async function EstrategiaPage() {
   const user = await requireUser();
   const repo = await getRepo(user.id);
-  const [strategy, settings, assets, defaultContribution] = await Promise.all([
-    repo.getStrategy(), loadSettings(repo), repo.getAssets(), repo.getSetting<number>("default_contribution"),
+  const [strategy, settings, assets] = await Promise.all([
+    repo.getStrategy(), loadSettings(repo), repo.getAssets(),
   ]);
   const sum = strategy.filter((s) => s.enabled && !s.is_legacy).reduce((a, s) => a + s.target_weight, 0);
   const names = new Map(assets.map((a) => [a.ticker, a.name]));
@@ -110,7 +110,6 @@ export default async function EstrategiaPage() {
           <div className="card">
             <h3>Regras</h3>
             <div className="form-grid">
-              <label>Aporte padrão (US$)<input name="default_contribution" defaultValue={defaultContribution ?? 550} inputMode="decimal" /></label>
               <label>Caixa de oportunidade máx. (% do aporte)<input name="maxOpportunityCashPct" defaultValue={settings.maxOpportunityCashPct * 100} inputMode="decimal" /></label>
               <label>Saldo máx. de caixa (nº de aportes)<input name="maxOpportunityCashContributions" defaultValue={settings.maxOpportunityCashContributions} inputMode="decimal" /></label>
               <label>Ordem mínima (US$)<input name="minOrderUsd" defaultValue={settings.minOrderUsd} inputMode="decimal" /></label>

@@ -69,6 +69,17 @@ Características relevantes:
 
 Esses valores são parâmetros atuais, não regras permanentes.
 
+> **Esclarecimento do usuário:** essas faixas são apenas **contexto do estágio
+> patrimonial atual**. Não são regra fixa, valor padrão do motor, média
+> obrigatória, limite mínimo/máximo nem parâmetro para forçar a distribuição.
+> O motor trabalha sempre com o **capital disponível para aporte neste ciclo**,
+> informado pelo usuário (R\$ 2.500, R\$ 10.000, US\$ 2.000 ou qualquer valor,
+> inclusive meses excepcionais). Fluxo: capital disponível no ciclo → análise
+> das oportunidades atuais → comparação entre alternativas → avaliação da
+> carteira existente → pesos estratégicos, concentração, risco e valuation →
+> distribuição do capital. Nada de "X% para A e Y% para B" a partir de um
+> aporte padrão.
+
 ------------------------------------------------------------------------
 
 ## 3. FILOSOFIA DE INVESTIMENTO

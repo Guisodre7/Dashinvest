@@ -5,7 +5,7 @@ import { Kpi, MacroPanel, WeightBar } from "@/components/sections";
 import { splitMonthly } from "@/lib/allocation/split";
 import { loadBrStances } from "@/lib/data/brStances";
 import { loadStances } from "@/lib/data/stances";
-import { parseUserNumber } from "@/lib/userNumber";
+import { parseMoneyInput } from "@/lib/userNumber";
 import { saveSplitTarget } from "./actions";
 import { requireUser } from "@/lib/auth";
 import { loadBrazil } from "@/lib/data/brazil";
@@ -25,7 +25,7 @@ export default async function GeralPage({ searchParams }: { searchParams: Promis
   const br = await loadBrazil(ctx.repo);
   const [splitSaved, projection] = await Promise.all([ctx.repo.getSetting<number>("split_target").catch(() => null), ctx.repo.getProjectionSettings().catch(() => null)]);
   const splitTarget = splitSaved ?? projection?.brazilPct ?? 50;
-  const monthly = parseUserNumber(totalRaw);
+  const monthly = parseMoneyInput(totalRaw);
   // Oportunidades só são calculadas quando o plano é pedido (fundamentos da B3 têm cache de 24h).
   let plan: ReturnType<typeof splitMonthly> | null = null;
   if (monthly && monthly > 0) {

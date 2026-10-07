@@ -2,6 +2,7 @@ import { allocate } from "@/lib/analysis/allocation";
 import { FlagBR } from "@/components/Icons";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
+import { getCycleCapital } from "@/lib/data/cycleCapital";
 import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
 import { brl, dateBr, n, pct, usd } from "@/lib/format";
 
@@ -13,7 +14,7 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   const { portfolio: p, analyses } = ctx;
   const [snapshots, transactions, dividends, defaultAmount, st] = await Promise.all([
     ctx.repo.getSnapshots(31), ctx.repo.getTransactions(200), ctx.repo.getDividends(),
-    ctx.repo.getSetting<number>("default_contribution"), loadStances(ctx, ctx.repo),
+    getCycleCapital(ctx.repo, "US"), loadStances(ctx, ctx.repo),
   ]);
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const buys = transactions.filter((t) => t.kind === "buy" && t.trade_date >= monthAgo);
@@ -32,8 +33,9 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   const nextMonth = new Date(Date.now() + 31 * 86_400_000).toISOString().slice(0, 10);
   const events = [...analyses.flatMap((a) => a.events), ...ctx.macroEvents].filter((e) => e.date <= nextMonth).sort((a, b) => a.date.localeCompare(b.date));
   const values = Object.fromEntries(p.positions.map((x) => [x.ticker, x.valueUsd ?? 0]));
-  const amount = defaultAmount ?? 550;
-  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances), qualityPremium: qualityPremiumOf(st.stances), mood: ctx.mood });
+  // Capital do ciclo informado pelo usuário — sem valor padrão (spec §2 é só contexto).
+  const amount = defaultAmount?.amount ?? null;
+  const next = amount === null ? null : allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances), qualityPremium: qualityPremiumOf(st.stances), mood: ctx.mood });
 
   return (
     <article className="stack" style={{ maxWidth: 820, gap: 0 }}>
@@ -66,8 +68,8 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
       <Block n={10} title="Oportunidades">{opportunities.length ? opportunities.map((a) => <div key={a.ticker}>{a.ticker}: {a.signals.filter((s) => s.kind === "OPPORTUNITY" || s.kind === "VALUATION_COMPRESSION").map((s) => s.message).join(" ")}</div>) : "Nenhum sinal de oportunidade de acumulação."}</Block>
       <Block n={11} title="Riscos">{risks.length ? risks.map(({ t, s }) => <div key={`${t}-${s.kind}`}>{t}: {s.title} — {s.message}</div>) : "Nenhum risco específico sinalizado pelos dados."}</Block>
       <Block n={12} title="Eventos do próximo mês">{events.length ? events.map((e) => <div key={`${e.ticker}-${e.kind}-${e.date}`}>{dateBr(e.date)} · {e.ticker ?? "Macro"} · {e.title}</div>) : "Nenhum evento no calendário disponível."}</Block>
-      <Block n={13} title={`Distribuição recomendada do próximo aporte (${usd(amount, 0)})`}>
-        {next.blocked ? <span className="neg">{next.blockReasons.join(" ")}</span> : (
+      <Block n={13} title={amount !== null ? `Distribuição recomendada do capital deste ciclo (${usd(amount, 0)})` : "Distribuição do próximo aporte"}>
+        {next === null ? <span className="muted">Capital disponível deste ciclo ainda não informado (Aporte e valuation).</span> : next.blocked ? <span className="neg">{next.blockReasons.join(" ")}</span> : (
           <>
             {next.lines.filter((l) => l.amount > 0).map((l) => <div key={l.ticker}>{l.ticker}: <strong>{usd(l.amount)}</strong> — {l.action}</div>)}
             {next.opportunityCash > 0 && <div>Caixa de oportunidade: {usd(next.opportunityCash)}</div>}

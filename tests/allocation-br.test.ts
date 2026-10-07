@@ -69,3 +69,12 @@ describe("divisão mensal Brasil × Exterior", () => {
     expect(splitMonthly({ ...base, usOpportunities: 3 }).usBrl).toBe(3000);
   });
 });
+
+describe("capital disponível no ciclo (sem padrão, piso ou teto)", () => {
+  it("analisa exatamente o valor informado, de R$ 2.500 a R$ 10.000", () => {
+    for (const v of [2500, 3000, 5000, 10000]) {
+      const r = allocateBr(v, summary(10000, 2000, 2000), strategy, [st("ITUB4", "acao", 85), st("PETR4", "acao", 100), st("HGLG11", "fii", 90), st("KNRI11", "fii", 100)]);
+      expect(r.lines.reduce((a, l) => a + l.amount, 0)).toBe(v);
+    }
+  });
+});

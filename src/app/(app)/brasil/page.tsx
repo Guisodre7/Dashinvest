@@ -20,7 +20,8 @@ import { loadBrazil } from "@/lib/data/brazil";
 import { loadBrStances } from "@/lib/data/brStances";
 import { allocateBr } from "@/lib/allocation/brAllocate";
 import { brAllocationResult } from "@/lib/allocation/brView";
-import { parseUserNumber } from "@/lib/userNumber";
+import { getCycleCapital, setCycleCapital } from "@/lib/data/cycleCapital";
+import { parseMoneyInput } from "@/lib/userNumber";
 import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
 import { getRepo } from "@/lib/db/repo";
 import { brl, dateBr, n, pct, pp, tone } from "@/lib/format";
@@ -41,7 +42,12 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
   const br = await loadBrazil(repo);
   // Fundamentos só quando a aba de aporte/valuation é aberta (mais rápido no resto).
   const brs = tab === "aporte" || tab === "resumo" ? await loadBrStances(br, repo) : { views: [], errors: {} as Record<string, string> };
-  const aporteValor = parseUserNumber(valor);
+  // Capital disponível NESTE ciclo: o valor informado agora; senão, o já informado neste mês.
+  // Sem valor padrão, piso ou teto (a faixa de aportes do perfil é só contexto — spec §2).
+  const informed = parseMoneyInput(valor);
+  const cycle = tab === "aporte" || tab === "resumo" ? await getCycleCapital(repo, "BR") : null;
+  if (informed && informed > 0 && informed !== cycle?.amount) await setCycleCapital(repo, "BR", informed);
+  const aporteValor = informed && informed > 0 ? informed : cycle?.amount ?? null;
   const alloc = tab === "aporte" && aporteValor && aporteValor > 0 ? brAllocationResult(allocateBr(aporteValor, br.summary, br.strategy, brs.views), br.summary, br.strategy, brs.views) : null;
   const hist = tab === "aporte" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
   const brBuys = tab === "aporte" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
@@ -131,7 +137,8 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
 
       <section className="section grid grid-2">
         <div className="card stack">
-          <div className="row-between"><h3>Próximo aporte</h3><Link href="/brasil?aba=aporte" scroll={false} className="small">Calcular →</Link></div>
+          <div className="row-between"><h3>Próximo aporte{cycle ? ` (${brl(cycle.amount)})` : ""}</h3><Link href="/brasil?aba=aporte" scroll={false} className="small">{cycle ? "Ver divisão →" : "Informar capital →"}</Link></div>
+          {!cycle && <p className="xsmall muted" style={{ margin: 0 }}>Capital disponível deste ciclo ainda não informado. Prioridades atuais:</p>}
           {nextUp.length ? (
             <ul className="decision-list">
               {nextUp.slice(0, 5).map(({ v, priority }) => (
@@ -185,12 +192,15 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
           <form className="card contrib" method="get">
             <input type="hidden" name="aba" value="aporte" />
             <div className="stack" style={{ gap: 4 }}>
-              <span className="small muted">Quanto vou aportar na carteira Brasil?</span>
-              <div className="money"><span>R$</span><input name="valor" inputMode="decimal" defaultValue={valor ?? ""} placeholder="3.000" aria-label="Valor do aporte em reais" /></div>
+              <span className="small muted">Capital disponível para aporte neste ciclo (Brasil)</span>
+              <div className="money"><span>R$</span><input name="valor" inputMode="decimal" defaultValue={valor ?? (cycle ? String(cycle.amount).replace(".", ",") : "")} placeholder="valor disponível" aria-label="Capital disponível neste ciclo, em reais" /></div>
             </div>
             <button className="btn btn-primary" style={{ alignSelf: "flex-end", padding: "12px 20px" }}>CALCULAR APORTE</button>
           </form>
-          <p className="xsmall faint">Não sabe quanto vai para o Brasil e quanto para o exterior? <Link href="/geral#plano">Plano do mês na Visão geral</Link>.</p>
+          <p className="xsmall faint">
+            {aporteValor ? <>O motor analisa exatamente {brl(aporteValor)} — sem valor padrão nem limite. </> : null}
+            Não sabe quanto vai para o Brasil e quanto para o exterior? <Link href="/geral#plano">Plano do mês na Visão geral</Link>.
+          </p>
           {alloc && (
             <div className="card stack">
               <AllocationView result={alloc} cur="R$" />

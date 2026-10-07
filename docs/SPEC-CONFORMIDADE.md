@@ -19,6 +19,7 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 | §13 Aporte | linha com quanto/por quê/risco | 🔧 + alternativas consideradas e o que faria mudar |
 | §22 Confiança | BR sempre "Média" | 🔧 BR: cai com divergência entre métodos; EUA: incerteza alta também quando os métodos divergem |
 | §24 Score | "Score 65" na linha do aporte | 🔧 removido da linha; prioridade vem do valuation explicado |
+| §2 Capital do ciclo | exterior usava US$ 550 fixo quando nada era informado; campo "Aporte padrão"; teto de US$ 1 milhão; "10.000" lido como 10 | 🔧 conceito **capital disponível neste ciclo** por carteira (`lib/data/cycleCapital.ts`): sempre o valor informado, sem padrão, piso, teto ou normalização; sem valor informado, o painel pede o valor em vez de supor; "10.000" = dez mil |
 
 ## Já conforme
 
@@ -42,4 +43,3 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 | §26 Backtest | parâmetros de `params.ts` sem validação histórica | ⏳ o painel grava a postura diária de cada ativo; montar avaliação sem look-ahead após 6–12 meses de histórico |
 | §33 Auditoria | recomendações do Brasil não são gravadas (só as do exterior) | ⏳ gravar cada cálculo de aporte BR com preço, valuation, decisão e confiança |
 | §16 Tese | campo explícito "o que confirmaria a tese" | ⏳ hoje as premissas cumprem esse papel; separar quando as teses forem cadastradas |
-| §2 Perfil | aporte de referência BR (R$ 2.500–3.000) não é usado como padrão | ⏳ usar como valor inicial do formulário do Brasil |

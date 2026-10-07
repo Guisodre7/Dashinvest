@@ -73,8 +73,6 @@ export async function saveEngineSettings(_: FormState, fd: FormData): Promise<Fo
       fomo60dPct: num(fd.get("fomo60dPct")) ?? 30,
     };
     await repo.setSetting("engine", mergeSettings(raw));
-    const def = num(fd.get("default_contribution"));
-    if (def !== null && def > 0) await repo.setSetting("default_contribution", def);
     await invalidateUserContext(user.id);
     revalidatePath("/", "layout");
     return { ok: true, message: "Configurações salvas." };
