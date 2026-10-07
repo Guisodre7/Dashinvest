@@ -113,7 +113,7 @@ export class FinnhubProvider implements MarketDataProvider {
   async getFundamentals(ticker: string): Promise<Fundamentals> {
     const [data, profile] = await Promise.all([
       this.metrics(ticker),
-      this.optional<{ name?: string; finnhubIndustry?: string; marketCapitalization?: number }>(
+      this.optional<{ name?: string; finnhubIndustry?: string; marketCapitalization?: number; shareOutstanding?: number }>(
         "/stock/profile2", { symbol: symbol(ticker) }, 86_400, ticker),
     ]);
     const m = data.metric ?? {};
@@ -126,6 +126,9 @@ export class FinnhubProvider implements MarketDataProvider {
       return last.length >= 3 ? (last.length % 2 ? last[(last.length - 1) / 2] : (last[last.length / 2 - 1] + last[last.length / 2]) / 2) : null;
     };
     const pfcf = toNum(m.pfcfShareTTM);
+    // FCF total = valor de mercado ÷ P/FCF (mesmo instante); ÷ ações em circulação (milhões).
+    const mcap = toNum(m.marketCapitalization), shares = toNum(profile?.shareOutstanding);
+    const fcfPerShare = mcap && pfcf && pfcf > 0 && shares && shares > 0 ? mcap / pfcf / shares : null;
     return {
       ticker,
       name: profile?.name ?? null,
@@ -136,6 +139,7 @@ export class FinnhubProvider implements MarketDataProvider {
       peg: toNum(m.pegTTM),
       ps: toNum(m.psTTM),
       pfcf,
+      fcf_per_share: fcfPerShare,
       ev_ebitda: toNum(m["evEbitdaTTM"]),
       fcf_yield: pfcf && pfcf > 0 ? 100 / pfcf : null,
       dividend_yield: toNum(m.dividendYieldIndicatedAnnual) ?? toNum(m.currentDividendYieldTTM),

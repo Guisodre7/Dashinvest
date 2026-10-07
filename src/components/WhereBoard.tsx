@@ -42,7 +42,7 @@ export function buyTiming(stance: Stance | null, price: number | null, cur: stri
   const fall = (to: number) => `${((1 - to / price) * 100).toFixed(0)}%`;
   if (stance.thesis === "deteriorada") return "Esperar a tese se confirmar antes de qualquer compra, mesmo com preço baixo.";
   const waiting = !["comprar", "recompra", "manter"].includes(stance.action);
-  if (price < buy && waiting) return "Preço já está na faixa de compra, mas esperar: lucros ou analistas ainda piorando. O painel avisa quando liberar.";
+  if (price < buy && waiting) return `Preço já está na faixa de compra, mas esperar: ${stance.headline.charAt(0).toLowerCase()}${stance.headline.slice(1)}`;
   if (price < buy) return price < strong
     ? `Agora: preço na faixa de compra forte (abaixo de ${money(cur, strong)}). Bom momento para aportar, em partes.`
     : `Agora: na faixa de compra (até ${money(cur, buy)}). Abaixo de ${money(cur, strong)} vira compra forte.`;
@@ -72,7 +72,7 @@ export default function WhereBoard({ rows }: { rows: BoardRow[] }) {
                 <div><div className="ticker">{r.ticker}</div><div className="xsmall faint">{r.bucket}</div></div>
                 <div className="row-wrap">
                   <span className={`badge ${r.priority === "ALTA" ? "badge-pos" : ""}`}>{PRIORITY_LABEL[r.priority]}</span>
-                  {meta && <span className={`badge action-${meta.group}`}><i className="dot" />{meta.label}</span>}
+                  {meta && <span className={`badge action-${meta.group}`}><i className="sdot" />{meta.label}</span>}
                   {r.stance?.band && <span className="xsmall muted">{BAND_META[r.stance.band].label}{r.stance.premiumPct !== null && ` (${r.stance.premiumPct >= 0 ? "+" : ""}${n(r.stance.premiumPct, 0)}%)`}</span>}
                 </div>
                 <div className="where-w">

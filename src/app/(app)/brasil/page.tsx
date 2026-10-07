@@ -4,6 +4,7 @@ import ActionForm from "@/components/ActionForm";
 import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
 import EntryReviewList from "@/components/EntryReviewList";
+import SourceLinks from "@/components/SourceLinks";
 import StanceCard from "@/components/StanceCard";
 import AllocationView from "@/components/AllocationView";
 import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
@@ -79,8 +80,9 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
       detail: v ? (
         <StanceCard s={v.stance} price={v.price} cur="R$" name={v.name ?? undefined} compact href={`/analisar?ativo=${encodeURIComponent(a.code)}&mercado=BR`}>
           <BrFundamentalsLine v={v} error={brs.errors[a.code]} />
+          <SourceLinks market="BR" ticker={a.code} fii={a.asset_class === "fii"} />
         </StanceCard>
-      ) : <p className="small faint">Fundamentos indisponíveis{brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""} — sem faixa de valuation.</p>,
+      ) : <><p className="small faint">Fundamentos indisponíveis{brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""} — sem faixa de valuation.</p><SourceLinks market="BR" ticker={a.code} fii={a.asset_class === "fii"} /></>,
     };
   }) : [];
 

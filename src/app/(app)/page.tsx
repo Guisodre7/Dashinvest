@@ -4,6 +4,7 @@ import ContributionForm from "@/components/ContributionForm";
 import StaleRefresher from "@/components/StaleRefresher";
 import { GlobalFreshness, LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveHeroValue, LivePortfolioKpis, LivePortfolioProvider, LivePortfolioTable } from "@/components/LivePortfolio";
+import SourceLinks from "@/components/SourceLinks";
 import StanceCard from "@/components/StanceCard";
 import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
@@ -11,7 +12,7 @@ import { AlertsList, RadarTable } from "@/components/sections";
 import { allocate } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { loadStances, stanceActions } from "@/lib/data/stances";
+import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
 import { dateBr, pct, tone, usd } from "@/lib/format";
 import { freshnessConfig } from "@/lib/freshness-config";
 
@@ -51,7 +52,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     contribution: defaultAmount, analyses, values: Object.fromEntries(portfolio.positions.map((p) => [p.ticker, p.valueUsd ?? 0])),
     existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings,
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
-    stances: st ? stanceActions(st.stances) : undefined, mood: ctx.mood,
+    stances: st ? stanceActions(st.stances) : undefined, qualityPremium: st ? qualityPremiumOf(st.stances) : undefined, mood: ctx.mood,
   }) : null;
   // "Onde aportar": todo o radar (estratégia + legado), com o valuation de cada ativo dentro da linha.
   const board: BoardRow[] = tab === "aporte" ? analyses.filter((a) => a.strategy.enabled || a.strategy.is_legacy).map((a) => {
@@ -69,6 +70,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           {a.signals.filter((x) => x.kind !== "STALE_DATA").length > 0 && (
             <ul className="clean xsmall">{a.signals.filter((x) => x.kind !== "STALE_DATA").slice(0, 3).map((x) => <li key={x.kind} className={x.tone === "positive" ? "pos" : x.tone === "negative" ? "neg" : "muted"}>{x.title}</li>)}</ul>
           )}
+          <SourceLinks market="US" ticker={a.ticker} />
           <Link href={`/ativo/${encodeURIComponent(a.ticker)}`} className="small">Análise completa de {a.ticker} →</Link>
         </>
       ),

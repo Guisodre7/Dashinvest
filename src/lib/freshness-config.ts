@@ -16,6 +16,9 @@ export const freshnessConfig = {
   maxMarketDataAgeSec: num("MAX_MARKET_DATA_AGE", 30),
   warnMarketDataAgeSec: num("WARN_MARKET_DATA_AGE", 15),
   maxMarketDataAgeClosedSec: num("MAX_MARKET_DATA_AGE_CLOSED", 60 * 60 * 100),
+  // Decisão de aporte (médio/longo prazo): cotação de até 4 dias é suficiente. A tela continua
+  // mostrando a idade real — atraso nunca é rotulado como tempo real.
+  maxDecisionAgeSec: num("MAX_DECISION_AGE", 60 * 60 * 24 * 4),
   maxFundamentalsAgeSec: num("MAX_FUNDAMENTALS_AGE", 60 * 60 * 24 * 10),
   maxEstimatesAgeSec: num("MAX_ESTIMATES_AGE", 60 * 60 * 24 * 10),
   maxNewsAgeSec: num("MAX_NEWS_AGE", 60 * 60 * 72),

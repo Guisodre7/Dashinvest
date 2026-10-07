@@ -1,5 +1,6 @@
 import "server-only";
 import { getBrRates } from "../market/brRates";
+import { impliedGrowth } from "../analysis/dcf";
 import { brStanceOne } from "../analysis/brStance";
 import { computeStance, type Stance } from "../analysis/stance";
 import { parseTaxSettings, usStanceInput } from "../analysis/stanceInput";
@@ -55,7 +56,11 @@ async function loadUs(user: SessionUser, ticker: string, priceOverride: number |
   }
   const input = usStanceInput(a, ctx.portfolio, transactions, parseTaxSettings(rawTax));
   const price = priceOverride ?? a.price;
-  const stance = computeStance({ ...input, price });
+  // Preço simulado: refaz o DCF reverso nesse preço (o crescimento embutido muda com o preço).
+  const fv = a.fairValue;
+  const impliedGap = priceOverride !== null && price && fv.fcf_per_share && fv.discount_rate && fv.base_growth != null
+    ? (impliedGrowth(price, fv.fcf_per_share, fv.discount_rate) ?? 0) - fv.base_growth : input.impliedGap;
+  const stance = computeStance({ ...input, price, impliedGap });
   const p = ctx.portfolio.positions.find((x) => x.ticker === ticker);
   const strategicTotal = ctx.portfolio.strategicUsd;
   const v = a.valuation, q = a.quality, t = a.trend;
@@ -109,7 +114,7 @@ async function loadBr(user: SessionUser, code: string, priceOverride: number | n
   const fund = data[code] ?? null;
   if (!quote && !fund) return empty("BR", code, "R$", `Sem cotação nem fundamentos para ${code} (${q.errors[code] ?? errors[code] ?? "sem resposta"}).`);
   const quotes = { ...q.quotes, [code]: priceOverride !== null && quote ? { ...quote, price: priceOverride } : quote };
-  const view = brStanceOne(code, br.strategy, br.summary, br.entries, quotes, data, parseTaxSettings(rawTax), undefined, rates?.real ?? null);
+  const view = brStanceOne(code, br.strategy, br.summary, br.entries, quotes, data, parseTaxSettings(rawTax), undefined, rates?.real ?? null, rates?.ipca12m ?? null);
   if (priceOverride !== null && !quote) view.price = priceOverride;
   const h = br.summary.holdings.find((x) => x.code === code);
   const fu = fund;

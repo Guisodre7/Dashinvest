@@ -45,7 +45,9 @@ describe("analisar compra — veredito", () => {
     expect(r.plan.map((p) => p.pct)).toEqual([40, 30, 30]);
   });
   it("esticado → ESPERAR MELHOR PREÇO; deteriorada → NÃO AUMENTAR", () => {
-    expect(v({ price: 18.5 }).key).toBe("esperar");
+    expect(v({ price: 18.5, qualityScore: 70 }).key).toBe("esperar");
+    // Excelente e só um pouco cara: compra parcial (aporte menor), não espera para sempre.
+    expect(v({ price: 18.5 }).key).toBe("parcial");
     expect(v({ signalKinds: ["THESIS_DETERIORATION"] }).key).toBe("nao_aumentar");
   });
   it("sem valuation → DADOS INSUFICIENTES", () => expect(v({ fair: null }).key).toBe("sem_dados"));

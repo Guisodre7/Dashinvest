@@ -25,8 +25,14 @@ describe("freshness", () => {
     expect(f.label).toBe("Dados atualizados há 8 segundos");
     expect(f.blocksPriceDecisions).toBe(false);
   });
-  it("bloqueia dado antigo com mercado aberto", () => {
+  it("cotação de minutos/horas: mostra a idade real, mas não trava decisão de longo prazo", () => {
     const f = quoteFreshness(meta({ timestamp: new Date(now.getTime() - 120_000).toISOString() }), now, "OPEN", cfg);
+    expect(f.level).toBe("delayed");
+    expect(f.label).toMatch(/não é tempo real/);
+    expect(f.blocksPriceDecisions).toBe(false);
+  });
+  it("trava só com cotação de vários dias", () => {
+    const f = quoteFreshness(meta({ timestamp: new Date(now.getTime() - 5 * 86_400_000).toISOString() }), now, "OPEN", cfg);
     expect(f.level).toBe("stale");
     expect(f.blocksPriceDecisions).toBe(true);
   });
@@ -34,7 +40,7 @@ describe("freshness", () => {
     const f = quoteFreshness(meta({ timestamp: now.toISOString(), is_realtime: false, is_delayed: true, delay_minutes: 15 }), now, "OPEN", cfg);
     expect(f.level).toBe("delayed");
     expect(f.label).toContain("atraso de 15 minutos");
-    expect(f.blocksPriceDecisions).toBe(true);
+    expect(f.blocksPriceDecisions).toBe(false);
   });
   it("aceita último fechamento com mercado fechado", () => {
     const f = quoteFreshness(meta({ timestamp: new Date(now.getTime() - 3600_000 * 5).toISOString() }), now, "CLOSED", cfg);

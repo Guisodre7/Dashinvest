@@ -6,6 +6,8 @@ import { LivePositionValue } from "@/components/LivePortfolio";
 import LadderPlanner from "@/components/LadderPlanner";
 import PriceChart from "@/components/PriceChart";
 import EntryReviewList from "@/components/EntryReviewList";
+import AddToRadar from "@/components/AddToRadar";
+import SourceLinks from "@/components/SourceLinks";
 import StanceCard from "@/components/StanceCard";
 import StaleRefresher from "@/components/StaleRefresher";
 import { Kpi, ScoreBadge } from "@/components/sections";
@@ -79,6 +81,13 @@ export default async function AssetPage({ params }: { params: Promise<{ ticker: 
           <Kpi label="Confiança da análise" value={a.confidence.level} sub={`Data quality ${n(a.dataQuality.score, 0)}%`} />
         </div>
       </section>
+
+      <section className="section"><SourceLinks market="US" ticker={ticker} /></section>
+
+      {!a.strategy.is_legacy && (
+        <section className="section"><AddToRadar market="US" ticker={ticker} buckets={[...new Set(ctx.strategy.filter((r) => r.enabled && !r.is_legacy).map((r) => r.strategy_bucket))]}
+          inRadar={a.strategy.enabled ? `${a.strategy.strategy_bucket}, meta ${n(a.targetWeight, 2)}%` : null} /></section>
+      )}
 
       {a.signals.length > 0 && (
         <section className="section stack">

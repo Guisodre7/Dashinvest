@@ -2,7 +2,7 @@ import { allocate } from "@/lib/analysis/allocation";
 import { FlagBR } from "@/components/Icons";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { loadStances, stanceActions } from "@/lib/data/stances";
+import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
 import { brl, dateBr, n, pct, usd } from "@/lib/format";
 
 /** Relatório mensal — leitura de ~5 minutos, gerado a partir dos dados atuais. */
@@ -33,7 +33,7 @@ export default async function RelatorioPage({ searchParams }: { searchParams: Pr
   const events = [...analyses.flatMap((a) => a.events), ...ctx.macroEvents].filter((e) => e.date <= nextMonth).sort((a, b) => a.date.localeCompare(b.date));
   const values = Object.fromEntries(p.positions.map((x) => [x.ticker, x.valueUsd ?? 0]));
   const amount = defaultAmount ?? 550;
-  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances), mood: ctx.mood });
+  const next = allocate({ contribution: amount, analyses, values, existingOpportunityCash: ctx.opportunityCashBalance, settings: ctx.settings, stances: stanceActions(st.stances), qualityPremium: qualityPremiumOf(st.stances), mood: ctx.mood });
 
   return (
     <article className="stack" style={{ maxWidth: 820, gap: 0 }}>

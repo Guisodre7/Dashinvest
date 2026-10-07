@@ -26,6 +26,7 @@ export async function loadStances(ctx: LoadedContext, repo: Repo): Promise<{ sta
 
 /** Postura por ticker, para o motor de aporte respeitar o valuation. */
 export const stanceActions = (stances: Stance[]) => Object.fromEntries(stances.map((s) => [s.ticker, s.action]));
+export const qualityPremiumOf = (stances: Stance[]) => stances.filter((s) => s.qualityPremium).map((s) => s.ticker);
 
 const dayBr = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 

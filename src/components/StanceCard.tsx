@@ -21,7 +21,7 @@ export function BandBar({ s, price, cur }: { s: Stance; price: number | null; cu
       <div className="band-legend xsmall">
         {s.bands.map((b) => (
           <span key={b.key} className={s.band === b.key ? "strong" : "faint"}>
-            <i className={`dot band-dot-${b.key}`} />{BAND_META[b.key].label}: {b.low === null ? `< ${cur} ${fmt(b.high)}` : b.high === null ? `> ${cur} ${fmt(b.low)}` : `${cur} ${fmt(b.low)}–${fmt(b.high)}`}
+            <i className={`sdot band-dot-${b.key}`} />{BAND_META[b.key].label}: {b.low === null ? `< ${cur} ${fmt(b.high)}` : b.high === null ? `> ${cur} ${fmt(b.low)}` : `${cur} ${fmt(b.low)}–${fmt(b.high)}`}
           </span>
         ))}
       </div>
@@ -41,7 +41,7 @@ export default function StanceCard({ s, price, cur = "US$", name, compact = fals
           <strong>{compact ? <Link href={href ?? `/ativo/${encodeURIComponent(s.ticker)}#realizacao`}>{s.ticker}</Link> : "Valuation e decisão"}</strong>
           {name && <span className="xsmall faint"> · {name}</span>}
         </div>
-        <span className={`badge action-${meta.group}`}><i className="dot" />{meta.label}</span>
+        <span className={`badge action-${meta.group}`}><i className="sdot" />{meta.label}</span>
       </div>
       <div className="row-wrap xsmall">
         <span className="chip">Qualidade: <strong>{s.quality}</strong></span>

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import StanceCard from "@/components/StanceCard";
+import AddToRadar from "@/components/AddToRadar";
+import SourceLinks from "@/components/SourceLinks";
 import { requireUser } from "@/lib/auth";
 import { loadDecision } from "@/lib/data/decision";
 import { loadContext } from "@/lib/data/load";
@@ -23,6 +25,8 @@ export default async function AnalisarPage({ searchParams }: { searchParams: Pro
   const ctx = await loadContext(user);
   const br = await loadBrazil(ctx.repo);
   const options = [...ctx.strategy.map((s) => s.ticker), ...br.strategy.assets.map((a) => a.code)];
+  const inRadar = market === "BR" ? br.strategy.assets.some((a) => a.enabled && a.code === ticker) : ctx.strategy.some((r) => r.ticker === ticker && (r.enabled || r.is_legacy));
+  const usBuckets = [...new Set(ctx.strategy.filter((r) => r.enabled && !r.is_legacy).map((r) => r.strategy_bucket))];
   const d = valid ? await loadDecision(user, market, ticker, priceOverride) : null;
   const thesis = d ? (await getTheses(ctx.repo)).find((t) => t.ticker === ticker && t.status === "ativa") : undefined;
 
@@ -50,6 +54,13 @@ export default async function AnalisarPage({ searchParams }: { searchParams: Pro
       </form>
 
       {d?.notFound && <div className="banner banner-warn section">{d.notFound}</div>}
+
+      {d && !d.notFound && <section className="section"><SourceLinks market={market} ticker={ticker} fii={market === "BR" && /11$/.test(ticker) && !ticker.startsWith("BPAC")} /></section>}
+
+      {d && !d.notFound && (
+        <section className="section"><AddToRadar market={market} ticker={ticker} buckets={market === "BR" ? (/11$/.test(ticker) && !ticker.startsWith("BPAC") ? ["FII", "ACAO"] : ["ACAO", "FII"]) : usBuckets}
+          inRadar={inRadar ? (market === "BR" ? "carteira Brasil" : ctx.strategy.find((r) => r.ticker === ticker)?.strategy_bucket ?? "estratégia") : null} /></section>
+      )}
 
       {d && !d.notFound && verdict && (
         <>

@@ -20,7 +20,7 @@ const net = (r: { strong_buy: number; buy: number; hold: number; sell: number; s
 export function analystSignal(trend: EstimateTrend | null, a: AnalystData | null): AnalystSignal {
   const parts: number[] = [];
   const rev = trend?.eps_rev_90d ?? trend?.eps_rev_30d ?? null;
-  if (rev !== null) parts.push(rev >= 3 ? 0.6 : rev <= -3 ? -0.6 : rev / 5 * 0.6);
+  if (rev !== null) parts.push(Math.max(-0.6, Math.min(0.6, (rev / 3) * 0.6)));
   const recs = a?.recommendations ?? [];
   if (recs.length >= 3) {
     const now = net(recs[0]), before = net(recs[Math.min(3, recs.length - 1)]);

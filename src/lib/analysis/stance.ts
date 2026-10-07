@@ -116,6 +116,8 @@ export interface Stance {
   reasons: string[];
   /** "Alta acompanhada pelos fundamentos" × "preço mais rápido que os fundamentos". */
   rally: "justificada" | "expectativa" | null;
+  /** Excelente e só um pouco cara: aporte normal reduzido (não é oportunidade). */
+  qualityPremium?: boolean;
   realization: null | {
     pctLow: number; pctHigh: number; sharesLow: number; sharesHigh: number; valueLow: number; valueHigh: number;
     estGain: number; estTax: number; fees: number; efficient: boolean; note: string;
@@ -189,6 +191,7 @@ export function computeStance(i: StanceInput): Stance {
   const good = quality === "excelente" || quality === "boa";
   let action: ActionKey;
   let headline: string;
+  let qualityPremium = false;
 
   if (thesis === "deteriorada") {
     if (held && (quality === "fraca" || quality === "mediana")) {
@@ -206,6 +209,11 @@ export function computeStance(i: StanceInput): Stance {
     else if (good) { action = "realizacao"; headline = `Empresa continua boa, mas o preço está ${fmt(premiumPct, 0)}% acima do valor justo: avaliar vender uma parte e recomprar mais barato.`; }
     else if (quality !== "sem dados") { action = "reduzir"; headline = `Preço ${fmt(premiumPct, 0)}% acima do valor justo com qualidade apenas mediana/fraca: avaliar redução relevante.`; }
     else { action = "nao_aumentar"; headline = "Valuation extremamente esticado, sem dados de qualidade para sugerir venda: manter sem aumentar."; }
+  } else if (band === "esticado" && quality === "excelente" && (thesis === "intacta" || thesis === "não verificável") && (i.analystScore ?? 0) > -0.2 && (i.impliedGap ?? 0) <= 0.08) {
+    // Empresa excelente um pouco acima do valor justo: esperar "o preço certo" pode significar
+    // nunca comprar um bom compositor. Aporte normal e menor (não é oportunidade).
+    action = "manter"; qualityPremium = true;
+    headline = `Empresa excelente ${fmt(premiumPct, 0)}% acima do valor justo: aporte menor e constante, para não perder o crescimento de longo prazo (não é oportunidade).`;
   } else if (band === "esticado") {
     // Um pouco acima do valor justo: não compra mais, mas também não vende (jogo de longo prazo).
     action = "nao_aumentar"; headline = rally === "justificada" ? "A alta parece acompanhada por melhora dos fundamentos, mas o preço já está acima do valor justo: manter sem aumentar." : "Empresa pode ser boa, mas o preço está acima do valor justo: manter sem aumentar (não vender por isso).";
@@ -221,9 +229,10 @@ export function computeStance(i: StanceInput): Stance {
   }
 
   // Confirmações antes de chamar de oportunidade: analistas e expectativa embutida no preço.
-  if (action === "comprar" && (i.analystScore ?? 0) <= -0.4) {
+  const buying = action === "comprar" || action === "recompra";
+  if (buying && (i.analystScore ?? 0) <= -0.4) {
     action = "nao_aumentar"; headline = "Preço atrativo, mas os analistas estão cortando lucro/recomendação: esperar estabilizar antes de aumentar.";
-  } else if (action === "comprar" && (i.impliedGap ?? 0) > 0.08) {
+  } else if (buying && (i.impliedGap ?? 0) > 0.08) {
     action = "manter"; headline = "Abaixo do valor justo pelos múltiplos, mas o preço ainda embute crescimento acima do histórico: aporte normal, sem pressa.";
   }
 
@@ -252,11 +261,11 @@ export function computeStance(i: StanceInput): Stance {
     const s = i.lastSell;
     const m = i.fair.mean;
     const ladder = [
-      { label: "Recompra forte", low: null, high: r2(m * BAND_LIMITS[0]), pctOfSold: 40 },
-      { label: "Recompra normal", low: r2(m * BAND_LIMITS[0]), high: r2(m * BAND_LIMITS[1]), pctOfSold: 35 },
-      { label: "Recompra parcial", low: r2(m * BAND_LIMITS[1]), high: r2(m), pctOfSold: 25 },
-      { label: "Aguardar", low: r2(m), high: r2(m * BAND_LIMITS[2]), pctOfSold: 0 },
-      { label: "Ainda esticado", low: r2(m * BAND_LIMITS[2]), high: null, pctOfSold: 0 },
+      { label: "Recompra forte", low: null, high: r2(m * limits[0]), pctOfSold: 40 },
+      { label: "Recompra normal", low: r2(m * limits[0]), high: r2(m * limits[1]), pctOfSold: 35 },
+      { label: "Recompra parcial", low: r2(m * limits[1]), high: r2(m), pctOfSold: 25 },
+      { label: "Aguardar", low: r2(m), high: r2(m * limits[2]), pctOfSold: 0 },
+      { label: "Ainda esticado", low: r2(m * limits[2]), high: null, pctOfSold: 0 },
     ];
     const step = ladder.find((l) => (l.low === null || i.price! >= l.low) && (l.high === null || i.price! < l.high)) ?? ladder[ladder.length - 1];
     const qty = Math.floor(s.quantity * step.pctOfSold / 100 * 1e4) / 1e4;
@@ -270,5 +279,5 @@ export function computeStance(i: StanceInput): Stance {
     ? "Tese: não verificável automaticamente (sem estimativas de lucro na fonte gratuita) — confira resultados e notícias antes de decidir."
     : `Tese: ${thesis}.`);
   if (i.weight !== null) reasons.push(`Peso atual ${fmt(i.weight, 1)}% · meta ${fmt(i.target, 1)}%${i.maxWeight !== null ? ` · máximo ${fmt(i.maxWeight, 1)}%` : ""}.`);
-  return { ...base, bands, band, premiumPct, action, headline, reasons, rally, realization, rebuy };
+  return { ...base, bands, band, premiumPct, action, headline, reasons, rally, realization, rebuy, qualityPremium };
 }

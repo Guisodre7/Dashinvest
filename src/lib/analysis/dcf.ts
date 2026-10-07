@@ -1,3 +1,5 @@
+import { median } from "./robust";
+
 /**
  * Fluxo de caixa descontado (DCF) simples por ação, em duas fases:
  * anos 1–5 crescendo a g, anos 6–10 convergindo linearmente para a perpetuidade,
@@ -38,8 +40,7 @@ export function impliedGrowth(price: number, fcf: number, r: number): number | n
 
 /** Crescimento base: mediana do que a empresa entregou e do que se espera, 0%–20% a.a. */
 export function baseGrowth(candidatesPct: (number | null | undefined)[]): number | null {
-  const v = candidatesPct.filter((x): x is number => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+  const v = candidatesPct.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
   if (!v.length) return null;
-  const mid = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
-  return Math.max(0, Math.min(0.2, mid / 100));
+  return Math.max(0, Math.min(0.2, median(v) / 100));
 }

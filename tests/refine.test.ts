@@ -24,11 +24,19 @@ describe("Brasil: juros do Banco Central no valuation", () => {
     expect(alto.fair!.mean).toBeLessThan(baixo.fair!.mean);
     expect(sem.methods.map((m) => m.label)).toEqual(["Graham", "Bazin (6%)"]);
   });
+  it("P/VP justificado pelo ROE reconhece empresa que cresce com retorno alto", () => {
+    const banco = { kind: "acao", price: 40, lpa: 4, vpa: 18, dy: 3, pl: 10, roe: 23 } as BrFundamentals;
+    const v = brFair(banco, 40, 9.5, 5);
+    expect(v.methods.map((m) => m.label)).toContain("P/VP justificado pelo ROE");
+    const pvp = v.methods.find((m) => m.label === "P/VP justificado pelo ROE")!.value / 18;
+    expect(pvp).toBeGreaterThan(1.5); // ROE 23% vale bem mais que o patrimônio
+  });
+
   it("FII: VP/cota + renda pelo juro real", () => {
     const fii = { kind: "fii", price: 100, vpa: 110, dy: 11, dividendPerShare12m: 11 } as BrFundamentals;
     const v = brFair(fii, 100, 9);
     expect(v.methods).toHaveLength(2);
-    expect(v.fair!.mean).toBeCloseTo((110 + 11 / 0.105) / 2, 1);
+    expect(v.fair!.mean).toBeCloseTo((110 + 11 / 0.085) / 2, 1); // juro real longo = (9 + 5) / 2 = 7%
   });
 });
 

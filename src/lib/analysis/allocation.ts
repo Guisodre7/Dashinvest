@@ -54,6 +54,8 @@ export interface AllocationInput {
   globalBlockReasons?: string[];
   /** Postura de valuation de cada ticker (mesma da tela de valuation). */
   stances?: Record<string, ActionKey>;
+  /** Tickers "excelente e só um pouco cara": aporte normal reduzido. */
+  qualityPremium?: string[];
   /** Humor do mercado: medo = aporta tudo nas oportunidades; euforia = guarda mais caixa. */
   mood?: { mood: MarketMood; reasons: string[] };
 }
@@ -132,6 +134,7 @@ export function allocate(input: AllocationInput): AllocationResult {
       reasons.push(`valuation: ${ACTION_META[st].label.toLowerCase()} — não é momento de aumentar`);
     }
     if ((st === "comprar" || st === "recompra") && mult > 0) mult *= input.mood?.mood === "medo" ? 2 : 1.4;
+    if (input.qualityPremium?.includes(a.ticker) && mult > 0) { mult *= 0.5; reasons.push("excelente, mas um pouco acima do valor justo: aporte menor"); }
     // Analistas melhorando a visão puxam um pouco mais; piorando, um pouco menos.
     const sig = analystSignal(a.trend, a.analysts).score;
     if (sig !== null && mult > 0) mult *= 1 + 0.25 * sig;
@@ -147,7 +150,9 @@ export function allocate(input: AllocationInput): AllocationResult {
   let cash = 0;
   let cashReason: string | null = null;
   // Ritmo: com medo no mercado o aporte vai todo para quem está na faixa; com euforia, guarda mais.
-  const mood = input.mood?.mood ?? "normal";
+  const hasOpp = work.some((w) => { const st = input.stances?.[w.a.ticker]; return (st === "comprar" || st === "recompra") && w.mult > 0 && w.need > 0; });
+  // Medo só muda o ritmo se houver oportunidade de verdade para receber o dinheiro.
+  const mood = input.mood?.mood === "medo" && !hasOpp ? "normal" : input.mood?.mood ?? "normal";
   const cashPct = mood === "medo" ? 0 : mood === "euforia" ? Math.min(0.5, settings.maxOpportunityCashPct * 1.5) : settings.maxOpportunityCashPct;
   if (mood === "medo") notes.push(`Mercado com medo (${input.mood!.reasons.join(", ")}): momento de aportar tudo nas oportunidades, sem guardar caixa.`);
   if (mood === "euforia" && waitingTargetShare > 0) notes.push(`Mercado eufórico (${input.mood!.reasons.join(", ")}): uma parte maior fica em caixa para comprar mais barato depois.`);

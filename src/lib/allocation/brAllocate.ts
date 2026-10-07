@@ -46,7 +46,7 @@ export function allocateBr(amount: number, summary: PortfolioLedgerSummary, stra
     const target = strategy.classes[c] / (enabled.length || 1);
     const cands = enabled.map((a) => {
       const v = stances.find((s) => s.code === a.code);
-      const w = v ? ACTION_WEIGHT[v.stance.action] ?? 0 : 0;
+      const w = v ? (v.stance.qualityPremium ? 0.5 : ACTION_WEIGHT[v.stance.action] ?? 0) : 0;
       const weightNow = summary.holdings.find((h) => h.code === a.code)?.weight ?? 0;
       const under = target > 0 ? Math.max(0, target - weightNow) / target : 0;
       // Já na meta ou acima: espera (o aporte não concentra a carteira).
@@ -63,7 +63,7 @@ export function allocateBr(amount: number, summary: PortfolioLedgerSummary, stra
       const action = x.v?.stance.action;
       lines.push({
         label: x.a.code, code: x.a.code, assetClass: c, amount: amt * x.score / sum,
-        reason: action === "comprar" || action === "recompra" ? "Faixa de valuation atrativa: prioridade alta." : "Preço razoável: aporte normal.",
+        reason: action === "comprar" || action === "recompra" ? "Faixa de valuation atrativa: prioridade alta." : x.v?.stance.qualityPremium ? "Empresa excelente um pouco cara: aporte menor, sem esperar o preço ideal." : "Preço razoável: aporte normal.",
         stance: action ?? null,
       });
     }

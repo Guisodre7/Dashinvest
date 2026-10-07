@@ -2,7 +2,7 @@
 import { allocate, type AllocationResult } from "@/lib/analysis/allocation";
 import { requireUser } from "@/lib/auth";
 import { loadContext } from "@/lib/data/load";
-import { loadStances, stanceActions } from "@/lib/data/stances";
+import { loadStances, qualityPremiumOf, stanceActions } from "@/lib/data/stances";
 
 export interface ContributionState {
   result: AllocationResult | null;
@@ -32,6 +32,7 @@ export async function calculateContribution(_prev: ContributionState, formData: 
     settings: ctx.settings,
     globalBlockReasons,
     stances: stanceActions(stances),
+    qualityPremium: qualityPremiumOf(stances),
     mood: ctx.mood,
   });
   try {

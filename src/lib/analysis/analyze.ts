@@ -455,7 +455,8 @@ export function opportunityScore(c: ScoreCtx): OpportunityScore {
 export function computeDataQuality(input: AssetInput, fresh: Freshness, news: ScoredNews[], settings: EngineSettings, now = new Date()): DataQuality {
   const cfg = freshnessConfig;
   const comps: DataQuality["components"] = [];
-  const quoteOk = { realtime: 1, fresh: 1, delayed: 0.6, stale: 0, missing: 0 }[fresh.level];
+  // Médio/longo prazo: cotação de horas atrás é boa para decidir; só a muito antiga zera.
+  const quoteOk = { realtime: 1, fresh: 1, delayed: 0.9, stale: 0, missing: 0 }[fresh.level];
   comps.push({ key: "quote", label: "Cotação", ok: quoteOk, weight: 35, note: fresh.label });
   comps.push({
     key: "history", label: "Histórico de preços", weight: 10,

@@ -70,6 +70,8 @@ export interface Fundamentals {
   peg: number | null;
   ps: number | null;
   pfcf: number | null;
+  /** FCF por ação (12m), calculado no mesmo instante do P/FCF. */
+  fcf_per_share?: number | null;
   ev_ebitda: number | null;
   fcf_yield: number | null;
   dividend_yield: number | null;

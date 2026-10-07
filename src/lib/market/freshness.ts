@@ -48,53 +48,42 @@ export function humanAge(seconds: number): string {
 }
 
 /**
- * Avalia a validade de uma cotação. Com mercado aberto exige idade <= MAX_MARKET_DATA_AGE;
- * fora do pregão regular aceita o último fechamento, mas nunca o rotula como tempo real.
+ * Avalia a validade de uma cotação. A tela sempre mostra a idade real (atraso nunca
+ * vira "tempo real"); a decisão de aporte, que é de médio/longo prazo, só trava com
+ * cotação mais velha que MAX_DECISION_AGE (padrão 4 dias) ou sem cotação.
  */
 export function quoteFreshness(
   meta: DataMeta | null | undefined,
   now: Date = new Date(),
   statusNow: MarketStatus = getMarketStatus(now),
-  cfg: Pick<typeof freshnessConfig, "maxMarketDataAgeSec" | "maxMarketDataAgeClosedSec"> = freshnessConfig,
+  cfg: Pick<typeof freshnessConfig, "maxMarketDataAgeSec" | "maxMarketDataAgeClosedSec"> & { maxDecisionAgeSec?: number } = freshnessConfig,
 ): Freshness {
   if (!meta) {
     return { level: "missing", label: "Sem cotação disponível", age: null, blocksPriceDecisions: true };
   }
   const age = ageSeconds(meta.timestamp, now);
+  const decisionAge = cfg.maxDecisionAgeSec ?? 60 * 60 * 24 * 4;
+  const tooOld = age > decisionAge;
 
   if (statusNow === "OPEN") {
-    if (age > cfg.maxMarketDataAgeSec) {
-      const delayedByContract = meta.is_delayed && meta.delay_minutes
-        ? ` (fornecedor com atraso de ${meta.delay_minutes} min)`
-        : "";
-      return {
-        level: "stale",
-        label: `Dados desatualizados — há ${humanAge(age)}${delayedByContract}`,
-        age,
-        blocksPriceDecisions: true,
-      };
+    if (tooOld) {
+      return { level: "stale", label: `Dados desatualizados — há ${humanAge(age)}`, age, blocksPriceDecisions: true };
     }
-    if (!meta.is_realtime) {
+    if (age > cfg.maxMarketDataAgeSec || !meta.is_realtime) {
+      const delayedByContract = meta.is_delayed && meta.delay_minutes ? `Dados com atraso de ${meta.delay_minutes} minutos` : null;
       return {
         level: "delayed",
-        label: meta.delay_minutes
-          ? `Dados com atraso de ${meta.delay_minutes} minutos`
-          : `Dados não-realtime — atualizados há ${humanAge(age)}`,
+        label: delayedByContract ?? `Cotação de há ${humanAge(age)} (não é tempo real)`,
         age,
-        blocksPriceDecisions: true,
+        blocksPriceDecisions: false,
       };
     }
     return { level: "realtime", label: `Dados atualizados há ${humanAge(age)}`, age, blocksPriceDecisions: false };
   }
 
   // Fora do pregão regular: o preço de referência é o último fechamento (ou pré/pós, explicitado na UI).
-  if (age > cfg.maxMarketDataAgeClosedSec) {
-    return {
-      level: "stale",
-      label: `Dados desatualizados — há ${humanAge(age)}`,
-      age,
-      blocksPriceDecisions: true,
-    };
+  if (age > Math.max(cfg.maxMarketDataAgeClosedSec, decisionAge)) {
+    return { level: "stale", label: `Dados desatualizados — há ${humanAge(age)}`, age, blocksPriceDecisions: true };
   }
   return {
     level: "fresh",

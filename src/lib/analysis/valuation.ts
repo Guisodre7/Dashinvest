@@ -1,8 +1,7 @@
 import type { AnalystData, Fundamentals } from "../market/types";
 import { baseGrowth, dcfPerShare, discountRate, impliedGrowth } from "./dcf";
 import type { EstimateTrend } from "./estimates";
-
-const median = (sorted: number[]) => sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+import { robustRange } from "./robust";
 
 export interface ValuationView {
   pe: number | null;
@@ -95,6 +94,9 @@ export interface FairValueView {
   /** DCF reverso: crescimento anual que o preço embute × crescimento base da empresa (frações). */
   implied_growth?: number | null;
   base_growth?: number | null;
+  /** FCF por ação e taxa de desconto usados no DCF (para refazer o DCF reverso a outro preço). */
+  fcf_per_share?: number | null;
+  discount_rate?: number | null;
 }
 
 /**
@@ -134,26 +136,24 @@ export function fairValueView(
   }
 
   // 4) Fluxo de caixa descontado, com juros de 10 anos no desconto (juro alto = valor menor).
-  const fcfPs = price && f?.pfcf && f.pfcf > 0 ? price / f.pfcf : null;
+  // FCF/ação do próprio fornecedor (mesmo instante do P/FCF); senão, preço ÷ P/FCF.
+  const fcfPs = f?.fcf_per_share && f.fcf_per_share > 0 ? f.fcf_per_share : price && f?.pfcf && f.pfcf > 0 ? price / f.pfcf : null;
   const g = baseGrowth([f?.fcf_growth, f?.eps_growth_3y, f?.revenue_growth_3y, trend?.expected_eps_growth]);
-  let implied: number | null = null;
+  let implied: number | null = null, r: number | null = null;
   if (fcfPs && g !== null && riskFreePct !== null) {
-    const r = discountRate(riskFreePct, f?.beta ?? null);
+    r = discountRate(riskFreePct, f?.beta ?? null);
     est.push({ method: "Fluxo de caixa descontado", value: dcfPerShare(fcfPs, g, r), source: `${f!.meta.source} + FRED` });
     implied = impliedGrowth(price!, fcfPs, r);
   }
-  const extra = { implied_growth: implied, base_growth: g };
+  const extra = { implied_growth: implied, base_growth: g, fcf_per_share: fcfPs, discount_rate: r };
 
   if (est.length < 2) {
     return { ...empty(est.length === 1 ? "Fair value indisponível — apenas uma estimativa encontrada (mínimo 2)." : "Fair value indisponível."), estimates: est, ...extra };
   }
-  // Mediana dos métodos: um método fora da curva não puxa a faixa; a divergência é medida
-  // entre os métodos próximos da mediana (com 3+ métodos, o mais distante é descartado).
-  const sorted = est.map((e) => e.value).sort((a, b) => a - b);
-  const mean = median(sorted);
-  const kept = sorted.length >= 3 ? [...sorted].sort((a, b) => Math.abs(b - mean) - Math.abs(a - mean)).slice(1) : sorted;
-  const min = Math.min(...kept), max = Math.max(...kept);
-  const spread = ((max - min) / mean) * 100;
+  // Mediana dos métodos; um outlier claro não puxa a faixa, mas métodos sem consenso = conflito.
+  const rr = robustRange(est.map((e) => e.value));
+  const mean = rr.mid, min = rr.low, max = rr.high;
+  const spread = rr.spread * 100;
   if (spread > 80) {
     return { ...empty("Os dados disponíveis são conflitantes — estimativas de fair value divergem mais de 80%."), estimates: est, min, mean, max, uncertainty_pct: spread, ...extra };
   }

@@ -25,7 +25,7 @@ describe("valuation, realização parcial e recompra", () => {
   });
 
   it("mesma empresa um pouco esticada mas com só 3% da carteira → apenas não aumentar", () => {
-    const r = s({ price: 90, weight: 3, target: 10 });
+    const r = s({ price: 90, weight: 3, target: 10, qualityScore: 70 });
     expect(r.band).toBe("esticado");
     expect(r.action).toBe("nao_aumentar");
     expect(r.realization).toBeNull();
@@ -39,8 +39,15 @@ describe("valuation, realização parcial e recompra", () => {
 
   it("nunca vende só para reequilibrar: 30% da carteira (meta 10%) com preço justo ou um pouco esticado", () => {
     expect(s({ price: 80 }).action).toBe("manter");
-    expect(s({ price: 90 }).action).toBe("nao_aumentar");
+    expect(s({ price: 90, qualityScore: 70 }).action).toBe("nao_aumentar");
     expect(s({ price: 90 }).realization).toBeNull();
+  });
+
+  it("excelente e só um pouco cara: aporte menor (não perde o compositor), nunca com tese em observação", () => {
+    const r = s({ price: 90 });
+    expect(r).toMatchObject({ band: "esticado", action: "manter", qualityPremium: true });
+    expect(s({ price: 90, estimates: { direction: "falling", significantCut: false, epsRev90d: -2 } }).action).toBe("nao_aumentar");
+    expect(s({ price: 104 }).action).toBe("realizacao"); // muito cara continua sendo realização
   });
 
   it("variação de preço ≠ valuation: subiu 50% e continua abaixo do valor justo → não é esticada", () => {
@@ -50,9 +57,10 @@ describe("valuation, realização parcial e recompra", () => {
   });
 
   it("alta justificada pelos fundamentos não gera realização mesmo acima do peso", () => {
-    const r = s({ price: 90, priceChange6m: 30, estimates: { direction: "rising", significantCut: false, epsRev90d: 8 } });
+    const r = s({ price: 90, qualityScore: 70, priceChange6m: 30, estimates: { direction: "rising", significantCut: false, epsRev90d: 8 } });
     expect(r.rally).toBe("justificada");
     expect(r.action).toBe("nao_aumentar");
+    expect(r.realization).toBeNull();
   });
 
   it("alta só por expectativa é sinalizada", () => {

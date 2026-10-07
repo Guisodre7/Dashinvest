@@ -27,6 +27,7 @@ export function brStances(
   strategy: BrStrategy, summary: PortfolioLedgerSummary, entries: LedgerEntry[],
   quotes: Record<string, Quote | null>, fundamentals: Record<string, BrFundamentals>, tax: TaxSettings, now = new Date(),
   realPct: number | null = null,
+  ipcaPct: number | null = null,
 ): BrStanceView[] {
   const since = new Date(now.getTime() - 548 * 86_400_000).toISOString().slice(0, 10);
   const enabled = strategy.assets.filter((a) => a.enabled);
@@ -34,7 +35,7 @@ export function brStances(
     ...enabled.map((a) => a.code),
     ...summary.holdings.filter((h) => (h.asset_class === "acao" || h.asset_class === "fii") && h.quantity > 0).map((h) => h.code),
   ])];
-  return codes.map((code) => brStanceOne(code, strategy, summary, entries, quotes, fundamentals, tax, since, realPct));
+  return codes.map((code) => brStanceOne(code, strategy, summary, entries, quotes, fundamentals, tax, since, realPct, ipcaPct));
 }
 
 /** Postura de um único ativo da B3 (também para ativos fora da estratégia, ex.: analisar compra). */
@@ -44,6 +45,7 @@ export function brStanceOne(
   since = new Date(Date.now() - 548 * 86_400_000).toISOString().slice(0, 10),
   /** Juro real (%) do Banco Central — entra no yield exigido e no P/L justo. */
   realPct: number | null = null,
+  ipcaPct: number | null = null,
 ): BrStanceView {
   const enabled = strategy.assets.filter((a) => a.enabled);
     const asset = enabled.find((a) => a.code === code);
@@ -51,7 +53,7 @@ export function brStanceOne(
     const f = fundamentals[code] ?? null;
     const cls: "acao" | "fii" = (asset?.asset_class ?? (h?.asset_class === "fii" ? "fii" : f?.kind === "fii" ? "fii" : "acao"));
     const price = quotes[code]?.price ?? f?.price ?? null;
-    const { fair, methods, reason } = f ? brFair(f, price, realPct) : { fair: null, methods: [], reason: "Fundamentos indisponíveis." };
+    const { fair, methods, reason } = f ? brFair(f, price, realPct, ipcaPct) : { fair: null, methods: [], reason: "Fundamentos indisponíveis." };
     const q = f ? brQuality(f) : { score: null, coverage: 0, notes: [] };
     const nInClass = enabled.filter((a) => a.asset_class === cls).length || 1;
     const target = asset ? strategy.classes[cls] / nInClass : 0;
