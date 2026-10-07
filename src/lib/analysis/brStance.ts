@@ -2,7 +2,7 @@ import type { BrFundamentals } from "../market/parseFundamentus";
 import type { Quote } from "../market/types";
 import type { BrStrategy } from "../portfolio/brStrategy";
 import type { LedgerEntry, PortfolioLedgerSummary } from "../portfolio/ledger";
-import { brFair, brQuality } from "./brValuation";
+import { brFair, brQuality, isBrCommodity } from "./brValuation";
 import { computeStance, type Stance, type StanceInput } from "./stance";
 import type { TaxSettings } from "./stanceInput";
 
@@ -69,6 +69,8 @@ export function brStanceOne(
       position: h && h.quantity > 0 && h.value !== null ? { quantity: h.quantity, avgCost: h.avg_price, value: h.value } : null,
       lastSell: sell ? { date: sell.trade_date, price: sell.price!, quantity: sell.quantity! } : null,
       tax: cls === "fii" ? tax.BR_FII : tax.BR_ACAO, currency: "R$",
+      // Commodity: lucro cíclico → faixa de compra exige mais margem de segurança.
+      uncertain: !!f && isBrCommodity(f),
     });
     if (!fair && reason) stance.reasons.push(reason);
     return { stance, code, assetClass: cls, name: asset?.name ?? h?.name ?? f?.name ?? null, price, fundamentals: f, methods, fair, fairReason: reason, qualityNotes: q.notes };

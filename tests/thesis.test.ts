@@ -61,7 +61,8 @@ describe("alerta de mudança de tese", async () => {
   it("tese ativa + deterioração → alerta crítico com link para a tese", () => {
     const c = thesisCandidates([thesis], [st(["THESIS_DETERIORATION"])]);
     expect(c).toHaveLength(1);
-    expect(c[0]).toMatchObject({ category: "thesis", priority: "critical", url: "/teses/t1", title: "Mudança potencial de tese: NU" });
+    expect(c[0]).toMatchObject({ category: "thesis", priority: "critical", url: "/teses/t1", title: "Tese ameaçada: NU" });
+    expect(c[0].body).toMatch(/não invalida a tese sozinho/);
     expect(c[0].body).toMatch(/Clientes crescendo; México lucrativo…/);
   });
   it("tese encerrada não alerta", () => {

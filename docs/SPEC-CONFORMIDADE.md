@@ -30,6 +30,19 @@ Legenda: ✅ conforme · 🔧 ajustado nesta revisão · ⏳ pendente (com motiv
 | §16 Tese | 🔧 campos separados "o que confirmaria a tese" e "o que invalidaria a tese" |
 | §26 Avaliação histórica | 🔧 avaliação ponto-a-ponto, sem look-ahead, das faixas gravadas diariamente (30/90/180 dias) na Visão geral; histórico ampliado para ~400 dias. Os parâmetros só devem ser recalibrados quando a amostra estiver pronta |
 
+## Teses-base (`docs/DASHINVEST_TESES_BASE.md`)
+
+| Regra | Implementação |
+|---|---|
+| Tese é contexto, nunca gatilho | Tese intacta/em observação não muda a conta; postura continua vindo de qualidade + valuation + peso |
+| 4 estados com evento | intacta · em observação · ameaçada · invalidada (`effectiveThesisState`), sempre com o evento e a origem (usuário ou dados) |
+| Dados não invalidam sozinhos | sinais de deterioração levam no máximo a "ameaçada"; "invalidada" só por decisão do usuário |
+| Ameaçada / invalidada | ameaçada segura novas compras até investigar; invalidada → avaliar saída (com posição) ou evitar (`applyThesisState`) |
+| §7 campos por ativo | confirma, ameaça (editável), invalida, barato demais / caro demais (pelas faixas de valuation atuais), alternativas (ativos da mesma carteira em faixa de compra), o que monitorar, como valorar |
+| Commodities (PETR4/VALE3) | sem Bazin (dividendo passado) e faixa de compra com margem de segurança maior |
+| Carga | "Minhas teses → Carregar teses-base": 21 teses; não apaga nada, só completa campos vazios |
+| Pendente | dados setoriais para confirmar premissas automaticamente (CET1, inadimplência, AUM, lifting cost, vacância por imóvel, CRIs) — fonte gratuita não traz; caminho: leitura de releases por evento |
+
 ## Já conforme
 
 - §1/§4/§25 Não executa ordens; recomenda inclusive inação ("esperar", "não aumentar", caixa de oportunidade). ✅

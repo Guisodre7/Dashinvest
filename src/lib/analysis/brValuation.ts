@@ -19,6 +19,13 @@ export const NEUTRAL_REAL_RATE = PARAMS.brazil.neutralRealRate;
 /** Bancos, seguradoras e financeiras (setor do Fundamentus): modelo setorial próprio (spec §9). */
 export const isBrFinancial = (f: Pick<BrFundamentals, "sector">) => !!f.sector && /financ|banc|segur|previd/i.test(f.sector);
 
+/**
+ * Commodities (petróleo, mineração, siderurgia, papel e celulose): lucro e dividendo oscilam com o
+ * ciclo — dividendo passado não sustenta valor (teses-base: PETR4/VALE3). Sem Bazin e com
+ * margem de segurança maior na faixa de compra.
+ */
+export const isBrCommodity = (f: Pick<BrFundamentals, "sector">) => !!f.sector && /petr[óo]leo|g[áa]s|minera|siderur|metalur|papel e celulose/i.test(f.sector);
+
 /** FII de papel/crédito × tijolo: modelos diferentes (spec §11). */
 export const fiiKind = (f: Pick<BrFundamentals, "segment">): "papel" | "tijolo" | "indefinido" =>
   !f.segment ? "indefinido" : /papel|receb|t[ií]tulos|cr[eé]dito|\bcri\b|h[ií]brido/i.test(f.segment) ? "papel" : "tijolo";
@@ -40,7 +47,7 @@ export function brFair(f: BrFundamentals, price: number | null, realPct: number 
   }
   if (f.lpa && f.vpa && f.lpa > 0 && f.vpa > 0) methods.push({ label: "Graham", value: Math.sqrt(22.5 * f.lpa * f.vpa) });
   const req = real !== null ? clamp(real, B.bazinYield[0], B.bazinYield[1]) : B.bazinYield[0];
-  if (f.dy && f.dy > 0 && px) methods.push({ label: `Bazin (${(req * 100).toFixed(1).replace(".0", "")}%)`, value: (f.dy / 100 * px) / req });
+  if (f.dy && f.dy > 0 && px && !isBrCommodity(f)) methods.push({ label: `Bazin (${(req * 100).toFixed(1).replace(".0", "")}%)`, value: (f.dy / 100 * px) / req });
   if (f.lpa && f.lpa > 0 && real !== null) {
     const pe = 1 / (Math.max(real, 0.02) + B.equityPremium);
     methods.push({ label: `Lucro × P/L ${pe.toFixed(1)} (juro real)`, value: f.lpa * pe });

@@ -26,6 +26,52 @@ export interface Thesis {
   horizon: string | null;
   status: "ativa" | "encerrada";
   reviews: ThesisReview[];
+  // --- Teses-base (docs/DASHINVEST_TESES_BASE.md). Campos opcionais: teses antigas continuam válidas.
+  /** Papel do ativo na carteira. */
+  role?: string | null;
+  /** O que ameaça: sinais que exigem investigação, mas ainda não invalidam (§7 das teses). */
+  threatens?: string[];
+  /** O que invalida: mudanças estruturais que eliminam o motivo de ter o ativo. */
+  invalidates?: string[];
+  /** Indicadores a monitorar. */
+  monitor?: string[];
+  /** Como o valuation deve ser feito para este ativo (ex.: P/VP com ROE para bancos). */
+  valuationApproach?: string | null;
+  /** Posição da carteira ou alternativa estratégica (VOO, BOVA11, IVVB11). */
+  kind?: "posicao" | "alternativa";
+  /** Origem: escrita pelo usuário ou carregada das teses-base. */
+  source?: "usuario" | "base";
+  /** Estado definido pelo usuário (o painel nunca invalida sozinho) e o histórico de mudanças. */
+  state?: ThesisState;
+  stateLog?: { date: string; state: ThesisState; reason: string; by: "usuário" | "dados" }[];
+}
+
+/** Estados obrigatórios da tese (teses-base §6). */
+export type ThesisState = "intacta" | "em observação" | "ameaçada" | "invalidada";
+export const THESIS_STATES: ThesisState[] = ["intacta", "em observação", "ameaçada", "invalidada"];
+const RANK: Record<ThesisState, number> = { intacta: 0, "em observação": 1, "ameaçada": 2, invalidada: 3 };
+
+/**
+ * Estado efetivo da tese e o EVENTO que o explica. Combina:
+ *  - o estado definido pelo usuário (revisão de premissas ou escolha explícita);
+ *  - os sinais dos dados (fundamentos/estimativas), que podem levar no máximo a "ameaçada":
+ *    invalidar uma tese é decisão do usuário, nunca gatilho automático (teses-base §8).
+ * Preço sozinho nunca muda o estado: a tese deve sobreviver à mudança de preço.
+ */
+export function effectiveThesisState(t: Pick<Thesis, "state" | "stateLog" | "reviews">, data: { thesis: Stance["thesis"]; headline: string } | null): { state: ThesisState; reason: string; by: "usuário" | "dados" } {
+  const lastUser = t.stateLog?.find((l) => l.by === "usuário");
+  const fromReview = t.reviews[0]
+    ? ({ "Tese preservada": "intacta", "Tese parcialmente comprometida": "em observação", "Tese significativamente comprometida": "ameaçada", "Sem avaliação": null } as const)[t.reviews[0].conclusion]
+    : null;
+  const user: { state: ThesisState; reason: string } | null = fromReview ? { state: fromReview, reason: `revisão das premissas em ${new Date(t.reviews[0].date).toLocaleDateString("pt-BR")}: ${t.reviews[0].conclusion.toLowerCase()}` } : null;
+  const dataState: { state: ThesisState; reason: string } | null = data?.thesis === "deteriorada"
+    ? { state: "ameaçada", reason: `dados: ${data.headline}` }
+    : data?.thesis === "em observação" ? { state: "em observação", reason: "dados: estimativas de lucro em queda ou correção sem explicação clara" } : null;
+  // Decisão explícita do usuário (após investigar) prevalece; revisão implícita vale o pior dos dois.
+  if (t.state && lastUser) return { state: t.state, reason: lastUser.reason, by: "usuário" };
+  if (user && (!dataState || RANK[user.state] >= RANK[dataState.state])) return { ...user, by: "usuário" };
+  if (dataState) return { ...dataState, by: "dados" };
+  return { state: "intacta", reason: "nenhum evento relevante registrado", by: "dados" };
 }
 
 export interface ThesisReview {
@@ -147,4 +193,23 @@ export function purchaseVerdict(s: Stance, ctx: { weightAfter: number | null; ta
     if (j?.high) why.push(`Faixa de compra normal até ${fmt(j.high, 2)}; atrativa até ${fmt(a?.high ?? 0, 2)}.`);
   }
   return { key, why, plan };
+}
+
+/**
+ * Aplica o estado da tese à postura de valuation SEM virar gatilho mecânico (teses-base §6/§8):
+ *  - invalidada (só pelo usuário): com posição → avaliar saída; sem posição → evitar;
+ *  - ameaçada: compra/recompra vira "não aumentar" até investigar (o preço sozinho nunca chega aqui);
+ *  - intacta / em observação: a conta não muda — tese positiva não é sinônimo de comprar.
+ */
+export function applyThesisState(s: Stance, eff: { state: ThesisState; reason: string; by: "usuário" | "dados" }, held: boolean): Stance {
+  if (eff.state === "invalidada") {
+    return { ...s, action: held ? "sair" : "evitar", realization: null, qualityPremium: false,
+      headline: `Tese invalidada (${eff.reason}): ${held ? "avaliar a saída da posição" : "fora das compras"}.`, reasons: [`Tese invalidada pelo usuário: ${eff.reason}.`, ...s.reasons] };
+  }
+  if (eff.state === "ameaçada" && (s.action === "comprar" || s.action === "recompra" || s.action === "manter")) {
+    return { ...s, action: "nao_aumentar", qualityPremium: false,
+      headline: `Tese ameaçada (${eff.reason}): investigar antes de aumentar a posição.`, reasons: [`Tese ameaçada: ${eff.reason}.`, ...s.reasons] };
+  }
+  if (eff.state !== "intacta") return { ...s, reasons: [`Tese ${eff.state}: ${eff.reason}.`, ...s.reasons] };
+  return s;
 }

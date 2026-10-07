@@ -3,6 +3,7 @@ import type { Stance } from "../analysis/stance";
 import { parseTaxSettings, usStances, type TaxSettings } from "../analysis/stanceInput";
 import type { Repo } from "../db/repo";
 import type { LoadedContext } from "./load";
+import { getTheses, withThesis } from "./theses";
 
 export const TAX_KEY = "tax_rules";
 export const HISTORY_KEY = "stance_history";
@@ -21,7 +22,10 @@ export async function loadStances(ctx: LoadedContext, repo: Repo): Promise<{ sta
   const tax = parseTaxSettings(rawTax);
   const realizedByTicker: Record<string, number> = {};
   for (const t of transactions) if (t.kind === "sell" && t.ticker) realizedByTicker[t.ticker] = (realizedByTicker[t.ticker] ?? 0) + (t.realized_pnl ?? 0);
-  return { stances: usStances(ctx.analyses, ctx.portfolio, transactions, tax), tax, realizedByTicker };
+  // Estado da tese (teses-base) ajusta a postura sem virar gatilho: ameaçada segura compras, invalidada só pelo usuário.
+  const theses = await getTheses(repo).catch(() => []);
+  const held = (t: string) => (ctx.portfolio.positions.find((p) => p.ticker === t)?.quantity ?? 0) > 0;
+  return { stances: withThesis(usStances(ctx.analyses, ctx.portfolio, transactions, tax), theses, "US", held), tax, realizedByTicker };
 }
 
 /** Postura por ticker, para o motor de aporte respeitar o valuation. */

@@ -241,8 +241,8 @@ export function thesisCandidates(theses: Thesis[], stances: Stance[]): Candidate
     if (!s || s.thesis !== "deteriorada") continue;
     out.push({
       category: "thesis", priority: "critical", market: t.market, ticker: t.ticker, url: `/teses/${t.id}`, key: `${t.ticker}:journal:${t.id}:deteriorada`,
-      title: `Mudança potencial de tese: ${t.ticker}`,
-      body: `Novo evento pode alterar uma das premissas da sua tese (${t.premises.slice(0, 2).join("; ")}${t.premises.length > 2 ? "…" : ""}). ${s.headline} Análise necessária.`,
+      title: `Tese ameaçada: ${t.ticker}`,
+      body: `Os dados sinalizam um evento que pode afetar a tese (${t.premises.slice(0, 2).join("; ")}${t.premises.length > 2 ? "…" : ""}). ${s.headline} Vale investigar e, se for o caso, atualizar o estado da tese — o painel não invalida a tese sozinho.`,
       publicBody: `Novo evento pode alterar uma das premissas da sua tese sobre ${t.ticker}. Análise necessária.`,
       reason: "Tese ativa + sinais de deterioração dos fundamentos",
     });

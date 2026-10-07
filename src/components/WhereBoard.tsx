@@ -19,6 +19,8 @@ export interface BoardRow {
   note: string;
   /** Valuation completo, aberto só quando a linha é expandida. */
   detail: React.ReactNode;
+  /** Estado da tese (teses-base) e o evento que o explica. */
+  thesis?: { state: string; reason: string; href: string } | null;
 }
 
 const ORDER: Record<Priority, number> = { ALTA: 0, "MÉDIA": 1, BAIXA: 2 };
@@ -73,6 +75,7 @@ export default function WhereBoard({ rows }: { rows: BoardRow[] }) {
                 <div className="row-wrap">
                   <span className={`badge ${r.priority === "ALTA" ? "badge-pos" : ""}`}>{PRIORITY_LABEL[r.priority]}</span>
                   {meta && <span className={`badge action-${meta.group}`}><i className="sdot" />{meta.label}</span>}
+                  {r.thesis && <span className={`badge thesis-${r.thesis.state.replace(/\s/g, "-")}`} title={r.thesis.reason}>Tese {r.thesis.state}</span>}
                   {r.stance?.band && <span className="xsmall muted">{BAND_META[r.stance.band].label}{r.stance.premiumPct !== null && ` (${r.stance.premiumPct >= 0 ? "+" : ""}${n(r.stance.premiumPct, 0)}%)`}</span>}
                 </div>
                 <div className="where-w">

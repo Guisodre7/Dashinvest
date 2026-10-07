@@ -8,6 +8,7 @@ import SourceLinks from "@/components/SourceLinks";
 import ValueRange from "@/components/ValueRange";
 import AuditList from "@/components/AuditList";
 import { listAudit } from "@/lib/data/audit";
+import { getTheses, thesisStatuses } from "@/lib/data/theses";
 import StanceCard from "@/components/StanceCard";
 import { BuyCard, SellCard, type SummaryAsset } from "@/components/SummaryCards";
 import WhereBoard, { overTarget, priorityFromStance, type BoardRow } from "@/components/WhereBoard";
@@ -45,12 +46,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Só o que a aba precisa é calculado.
   const needsAllocation = tab === "resumo" || tab === "aporte";
-  const [cycle, previous, st, audit] = await Promise.all([
+  const [cycle, previous, st, audit, theses] = await Promise.all([
     needsAllocation ? getCycleCapital(ctx.repo, "US") : null,
     tab === "aporte" ? ctx.repo.getLatestRecommendation().catch(() => null) : null,
     needsAllocation ? loadStances(ctx, ctx.repo) : null,
     tab === "aporte" ? listAudit(ctx.repo, "US") : [],
+    tab === "aporte" ? getTheses(ctx.repo).catch(() => []) : [],
   ]);
+  const thesisOf = st ? thesisStatuses(theses, st.stances, "US") : {};
   // Capital disponível NESTE ciclo: o valor vindo do plano mensal (Visão geral) ou o já informado
   // neste mês. Sem valor padrão, piso ou teto — a faixa de aportes do perfil é só contexto (spec §2).
   const fromPlan = parseMoneyInput(valor);
@@ -68,6 +71,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const line = preview?.lines.find((l) => l.ticker === a.ticker);
     const waitWhy = line && line.amount <= 0 ? line.why.match(/aguardar \((.+)\)\./)?.[1] : undefined;
     return {
+      thesis: thesisOf[a.ticker] ? { state: thesisOf[a.ticker].state, reason: thesisOf[a.ticker].reason, href: `/teses/${thesisOf[a.ticker].id}` } : null,
       id: `us-${a.ticker}`, ticker: a.ticker, bucket: a.strategy.is_legacy ? "Legado" : a.strategy.strategy_bucket,
       priority: a.strategy.is_legacy ? "BAIXA" : line ? line.priority : priorityFromStance(stance?.action, a.currentWeight, a.targetWeight),
       price: a.price, cur: "US$" as const, stance, current: a.currentWeight, target: a.targetWeight,

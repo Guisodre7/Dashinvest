@@ -22,6 +22,7 @@ import { loadBrStances } from "@/lib/data/brStances";
 import { allocateBr } from "@/lib/allocation/brAllocate";
 import { brAllocationResult } from "@/lib/allocation/brView";
 import { appendAudit, auditEntry, listAudit } from "@/lib/data/audit";
+import { getTheses, thesisStatuses } from "@/lib/data/theses";
 import { getCycleCapital, setCycleCapital } from "@/lib/data/cycleCapital";
 import { parseMoneyInput } from "@/lib/userNumber";
 import { HISTORY_KEY, snapshotOn, type StanceHistory } from "@/lib/data/stances";
@@ -59,6 +60,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
     }));
   }
   const audit = tab === "aporte" ? await listAudit(repo, "BR") : [];
+  const thesisOf = tab === "aporte" ? thesisStatuses(await getTheses(repo).catch(() => []), brs.views.map((v) => v.stance), "BR") : {};
   const hist = tab === "aporte" ? await repo.getSetting<StanceHistory>(HISTORY_KEY).catch(() => null) : null;
   const brBuys = tab === "aporte" ? [...br.entries].reverse().filter((e) => e.kind === "buy" && e.price).map((e) => {
     const v = brs.views.find((x) => x.code === e.code);
@@ -96,6 +98,7 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
     const h = s.holdings.find((x) => x.code === a.code);
     const current = s.currentValue > 0 ? h?.weight ?? 0 : null, target = a.enabled ? strategy.classes[a.asset_class] / nIn : 0;
     return {
+      thesis: thesisOf[a.code] ? { state: thesisOf[a.code].state, reason: thesisOf[a.code].reason, href: `/teses/${thesisOf[a.code].id}` } : null,
       id: `br-${a.code}`, ticker: a.code, bucket: CLASS_LABEL[a.asset_class], priority: a.enabled ? priorityFromStance(v?.stance.action, current, target) : "BAIXA",
       price: v?.price ?? null, cur: "R$" as const, stance: v?.stance ?? null, current, target,
       note: !a.enabled ? "Fora da estratégia: não recebe aporte." : !v ? `Sem dados de valuation${brs.errors[a.code] ? ` (${brs.errors[a.code]})` : ""}: espera.` : overTarget(current, target) ? `${v.stance.headline} Espera: já na meta ou acima.` : v.stance.headline,

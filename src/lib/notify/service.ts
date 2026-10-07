@@ -8,7 +8,7 @@ import { loadContext } from "../data/load";
 import type { NotificationRow, Repo } from "../db/repo";
 import { parseTaxSettings, usStances } from "../analysis/stanceInput";
 import { LADDER_KEY, recordStanceHistory, TAX_KEY, type Ladders } from "../data/stances";
-import { getTheses } from "../data/theses";
+import { getTheses, withThesis } from "../data/theses";
 import { brCandidates, ladderCandidates, thesisCandidates, macroCandidates, stanceCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
 import { decide, groupPushes, inQuietHours, parsePrefs, type Candidate, type Decision, type NotifyPrefs, type PushMessage } from "./rules";
 
@@ -109,7 +109,8 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   const [transactions, rawTax, ladders] = await Promise.all([
     repo.getTransactions(1000).catch(() => []), repo.getSetting(TAX_KEY).catch(() => null), repo.getSetting<Ladders>(LADDER_KEY).catch(() => null),
   ]);
-  const stances = usStances(ctx.analyses, ctx.portfolio, transactions, parseTaxSettings(rawTax), now);
+  const theses0 = await getTheses(repo).catch(() => []);
+  const stances = withThesis(usStances(ctx.analyses, ctx.portfolio, transactions, parseTaxSettings(rawTax), now), theses0, "US", (t) => (ctx.portfolio.positions.find((x) => x.ticker === t)?.quantity ?? 0) > 0);
   const prices = Object.fromEntries(ctx.analyses.map((a) => [a.ticker, a.price]));
   const brs = await loadBrStances(br, repo).catch(() => ({ views: [], errors: {} }));
   // Retrato diário também da carteira Brasil (para "O que mudou?" e "foi uma boa entrada?").

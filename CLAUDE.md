@@ -8,3 +8,6 @@ se a mudança está de acordo com essa especificação. Parâmetros de decisão 
 `src/lib/analysis/params.ts` (nunca números mágicos espalhados pelo código — spec §23).
 
 @docs/DASHINVEST_MASTER_SPEC.md
+
+Teses-base das carteiras (contexto qualitativo, nunca gatilho mecânico): `docs/DASHINVEST_TESES_BASE.md`,
+carregadas no painel a partir de `src/lib/thesis/baseTheses.ts`.

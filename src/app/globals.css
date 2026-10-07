@@ -530,3 +530,8 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 .source-links { line-height: 1.7; }
 .source-links a { white-space: nowrap; }
 .radar-add { border-color: var(--accent, var(--border)); }
+/* Estados da tese */
+.thesis-intacta { background: var(--pos-soft, #e3f1ea); color: var(--pos); }
+.thesis-em-observação { background: #fbf3d9; color: #8a6a12; }
+.thesis-ameaçada { background: #fbeadb; color: #9a4f12; }
+.thesis-invalidada { background: var(--neg-soft, #f6e3df); color: var(--neg); }
