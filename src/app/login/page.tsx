@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="login-wrap">
       <div className="card login-card stack">
         <div>
-          <h1>Carteira Internacional</h1>
+          <h1>DashInvest</h1>
           <p className="muted small">Acesso restrito ao titular.</p>
         </div>
         {error === "forbidden" && <div className="banner banner-neg">Conta não autorizada para este painel.</div>}

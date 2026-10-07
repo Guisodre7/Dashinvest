@@ -5,13 +5,16 @@ import { createSupabaseBrowserClient, type SupabasePublicConfig } from "@/lib/su
 
 export default function LoginForm({ config: supabase_cfg }: { config: SupabasePublicConfig }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Lê direto do formulário: o preenchimento automático (iPhone, gerenciador de senhas)
+    // nem sempre dispara onChange, e o estado ficaria com a senha antiga/incompleta.
+    const fd = new FormData(e.currentTarget);
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
     setBusy(true);
     setError(null);
     if (!supabase_cfg.url || !supabase_cfg.anonKey) {
@@ -33,8 +36,8 @@ export default function LoginForm({ config: supabase_cfg }: { config: SupabasePu
 
   return (
     <form onSubmit={submit} className="stack">
-      <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label>Senha<input type="password" autoComplete="current-password" required minLength={12} value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+      <label>E-mail<input name="email" type="email" autoComplete="username" required /></label>
+      <label>Senha<input name="password" type="password" autoComplete="current-password" required /></label>
       {error && <p className="neg small">{error}</p>}
       <button className="btn btn-primary" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
       <p className="faint xsmall">Após a senha, será exigido o código do app autenticador (MFA).</p>

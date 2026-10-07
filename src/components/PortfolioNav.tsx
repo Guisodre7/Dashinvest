@@ -8,7 +8,7 @@ type Ctx = "US" | "BR" | "ALL";
 /** Em qual carteira a página atual está (mesma regra em todo o app). */
 export function portfolioContext(path: string, params: URLSearchParams): Ctx {
   if (path.startsWith("/brasil")) return "BR";
-  if (path.startsWith("/geral") || path.startsWith("/teses") || path.startsWith("/notificacoes") || path.startsWith("/mudancas")) return "ALL";
+  if (path.startsWith("/geral") || path.startsWith("/teses") || path.startsWith("/notificacoes") || path.startsWith("/mudancas") || path.startsWith("/conta")) return "ALL";
   const m = params.get("m") ?? params.get("mercado");
   if (m === "BR") return "BR";
   if (path.startsWith("/oportunidades") && !m) return "ALL";
