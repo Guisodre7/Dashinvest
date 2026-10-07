@@ -535,3 +535,8 @@ input[type="range"] { padding: 0; border: 0; accent-color: var(--accent); width:
 .thesis-em-observação { background: #fbf3d9; color: #8a6a12; }
 .thesis-ameaçada { background: #fbeadb; color: #9a4f12; }
 .thesis-invalidada { background: var(--neg-soft, #f6e3df); color: var(--neg); }
+/* Campo de senha com mostrar/ocultar */
+.pwd-field { position: relative; display: block; }
+.pwd-field input { width: 100%; padding-right: 44px; }
+.pwd-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--text-2); cursor: pointer; border-radius: 8px; }
+.pwd-toggle:hover { background: var(--surface-2); }

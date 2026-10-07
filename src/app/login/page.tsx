@@ -16,7 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="muted small">Acesso restrito ao titular.</p>
         </div>
         {error === "forbidden" && <div className="banner banner-neg">Conta não autorizada para este painel.</div>}
-        <LoginForm config={supabasePublicConfig()} />
+        <LoginForm config={supabasePublicConfig()} linkError={error === "link"} />
       </div>
     </main>
   );

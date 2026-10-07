@@ -24,6 +24,14 @@ export async function proxy(request: NextRequest) {
   if (process.env.LOCAL_DEV_MODE === "true" && process.env.NODE_ENV !== "production") return res;
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return res;
 
+  // Link de e-mail do Supabase que caiu na raiz/login (Site URL): encaminha para o callback.
+  const sp = request.nextUrl.searchParams;
+  if (sp.get("code") || sp.get("token_hash")) {
+    const cb = new URL("/auth/callback", request.url);
+    sp.forEach((v, k) => cb.searchParams.set(k, v));
+    return NextResponse.redirect(cb);
+  }
+
   const isAuthPage = AUTH_PAGES.includes(pathname);
   const { url, anonKey } = supabasePublicConfig();
   if (!url || !anonKey) return isAuthPage ? res : deny(request, "unauthenticated", res);
@@ -56,7 +64,8 @@ export async function proxy(request: NextRequest) {
 
   // Já logado: não mostra a tela de login de novo.
   if (isAuthPage) {
-    if (fullyAuthenticated) return redirectWithCookies(request, "/", res);
+    const next = request.nextUrl.searchParams.get("next");
+    if (fullyAuthenticated) return redirectWithCookies(request, next && next.startsWith("/") && !next.startsWith("//") ? next : "/", res);
     if (pathname === "/login") return redirectWithCookies(request, "/mfa", res);
     return res;
   }

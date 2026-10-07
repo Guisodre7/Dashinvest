@@ -9,6 +9,12 @@ type State =
   | { step: "verify"; factorId: string }
   | { step: "error"; message: string };
 
+/** Próximo passo depois do código (só caminhos internos — evita redirecionamento aberto). */
+function nextPath(): string {
+  const n = new URLSearchParams(window.location.search).get("next");
+  return n && n.startsWith("/") && !n.startsWith("//") ? n : "/";
+}
+
 export default function MfaForm({ config: supabase_cfg }: { config: SupabasePublicConfig }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ step: "loading" });
@@ -20,7 +26,7 @@ export default function MfaForm({ config: supabase_cfg }: { config: SupabasePubl
     const supabase = createSupabaseBrowserClient(supabase_cfg);
     (async () => {
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal?.currentLevel === "aal2") { router.replace("/"); return; }
+      if (aal?.currentLevel === "aal2") { router.replace(nextPath()); return; }
       const { data, error } = await supabase.auth.mfa.listFactors();
       if (error) { setState({ step: "error", message: "Sessão expirada. Faça login novamente." }); return; }
       const verified = data.totp.find((f) => f.status === "verified");
@@ -42,7 +48,7 @@ export default function MfaForm({ config: supabase_cfg }: { config: SupabasePubl
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: state.factorId, code: code.trim() });
     setBusy(false);
     if (error) { setError("Código inválido."); return; }
-    router.replace("/");
+    router.replace(nextPath());
     router.refresh();
   }
 
