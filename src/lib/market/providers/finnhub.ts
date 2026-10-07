@@ -12,6 +12,12 @@ import {
 } from "../types";
 
 const BASE = "https://finnhub.io/api/v1";
+/**
+ * Endpoints só do plano pago. No gratuito NÃO são chamados: cada um respondia 403, mas antes
+ * disso somava ~6 chamadas por ativo a cada carregamento, estourando o limite de 60/min e
+ * derrubando junto a cotação e os fundamentos (painel "aguardando dados" com o mercado aberto).
+ */
+const PREMIUM = new Set(["/stock/eps-estimate", "/stock/revenue-estimate", "/stock/price-target", "/stock/upgrade-downgrade"]);
 const NAME = "finnhub";
 
 // Finnhub usa "BRK.B"; mantemos o ticker da aplicação.
@@ -33,7 +39,7 @@ export class FinnhubProvider implements MarketDataProvider {
     "quote", "fundamentals", "estimates", "analysts", "news", "marketNews", "events",
   ]);
 
-  constructor(private apiKey: string, private realtime = true) {}
+  constructor(private apiKey: string, private realtime = true, private premium = false) {}
 
   private url(path: string, params: Record<string, string>) {
     const q = new URLSearchParams({ ...params, token: this.apiKey });
@@ -46,6 +52,7 @@ export class FinnhubProvider implements MarketDataProvider {
 
   /** Endpoints premium: 401/403 => null (sem inventar valor). */
   private async optional<T>(endpoint: string, params: Record<string, string>, revalidate: number, ticker?: string): Promise<T | null> {
+    if (PREMIUM.has(endpoint) && !this.premium) return null;
     try {
       return await this.get<T>(endpoint, params, revalidate, ticker);
     } catch (err) {

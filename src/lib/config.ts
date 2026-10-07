@@ -16,6 +16,8 @@ export const serverConfig = {
 
   marketDataProvider: process.env.MARKET_DATA_PROVIDER ?? "composite",
   finnhubApiKey: process.env.FINNHUB_API_KEY ?? "",
+  /** Plano pago da Finnhub (estimativas, preço-alvo, upgrades). No gratuito esses endpoints nem são chamados. */
+  finnhubPremium: process.env.FINNHUB_PREMIUM === "true",
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY ?? "",
   /** Plano Alpha Vantage com dados realtime/US premium contratado? */
   alphaVantageRealtime: process.env.ALPHA_VANTAGE_REALTIME === "true",

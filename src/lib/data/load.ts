@@ -14,6 +14,7 @@ import { getMarketDataProvider, isDemoProvider } from "../market";
 import { buildMeta, isOlderThan } from "../market/freshness";
 import { getMarketStatus } from "../market/marketStatus";
 import type { FxRate } from "../market/provider";
+import { quoteFromHistory } from "../market/historyQuote";
 import type { MacroIndicator, MarketEvent, NewsItem, PriceHistory, Quote } from "../market/types";
 import { computePortfolio, type DividendRow, type PortfolioSummary, type PositionRow } from "../portfolio/calc";
 import { assetMeta } from "../portfolio/defaults";
@@ -171,7 +172,9 @@ async function computeContext(user: SessionUser, repo: Repo, tickersOpt?: string
     if (estimates) void repo.saveEstimates(estimates).catch(() => undefined);
     if (analysts) void repo.saveAnalystSnapshot(analysts).catch(() => undefined);
     errors.push(...tErr);
-    return { ticker, meta, quote, history, fundamentals, estimates, analysts, news: news ?? [], estimateHistory, errors: tErr };
+    // Sem cotação ao vivo: último fechamento do histórico (com a data real), nunca um preço inventado.
+    const q = quote ?? quoteFromHistory(ticker, history);
+    return { ticker, meta, quote: q, history, fundamentals, estimates, analysts, news: news ?? [], estimateHistory, errors: tErr };
   }));
 
   const quotes: Record<string, Quote | null> = Object.fromEntries(perTicker.map((p) => [p.ticker, p.quote]));

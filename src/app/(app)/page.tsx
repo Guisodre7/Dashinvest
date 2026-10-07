@@ -65,6 +65,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     globalBlockReasons: portfolio.missingPrices.length ? [`Sem preço para ${portfolio.missingPrices.join(", ")}.`] : [],
     stances: st ? stanceActions(st.stances) : undefined, qualityPremium: st ? qualityPremiumOf(st.stances) : undefined, mood: ctx.mood,
   }) : null;
+  // Bloqueado: mostra a causa técnica (ex.: limite do fornecedor), sem esconder o problema.
+  if (preview?.blocked) {
+    const tech = [...new Set(ctx.errors.filter((e) => /cotação|fundamentos/.test(e)).map((e) => e.replace(/^[^:]+:\s*/, "").slice(0, 120)))].slice(0, 3);
+    if (tech.length) preview.blockReasons.push(`Detalhe técnico das fontes: ${tech.join(" · ")}`);
+  }
   // "Onde aportar": todo o radar (estratégia + legado), com o valuation de cada ativo dentro da linha.
   const board: BoardRow[] = tab === "aporte" ? analyses.filter((a) => a.strategy.enabled || a.strategy.is_legacy).map((a) => {
     const stance = st?.stances.find((x) => x.ticker === a.ticker) ?? null;

@@ -23,7 +23,7 @@ let cached: MarketDataProvider | null = null;
  */
 export function getMarketDataProvider(): MarketDataProvider {
   if (cached) return cached;
-  const { marketDataProvider: kind, finnhubApiKey, alphaVantageApiKey, alphaVantageRealtime, tiingoApiKey } = serverConfig;
+  const { marketDataProvider: kind, finnhubApiKey, finnhubPremium, alphaVantageApiKey, alphaVantageRealtime, tiingoApiKey } = serverConfig;
 
   if (kind === "demo") {
     if (process.env.NODE_ENV === "production") {
@@ -33,7 +33,7 @@ export function getMarketDataProvider(): MarketDataProvider {
     return cached;
   }
 
-  const finnhub = finnhubApiKey ? new FinnhubProvider(finnhubApiKey, true) : null;
+  const finnhub = finnhubApiKey ? new FinnhubProvider(finnhubApiKey, true, finnhubPremium) : null;
   const alpha = alphaVantageApiKey ? new AlphaVantageProvider(alphaVantageApiKey, alphaVantageRealtime) : null;
 
   const chain: (MarketDataProvider | null)[] =
