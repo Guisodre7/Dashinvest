@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getRepo } from "@/lib/db/repo";
-import { CATEGORY_META, PRIORITY_LABEL, TABS, type NotifyTab } from "@/lib/notify/rules";
+import { CATEGORY_META, NEWS_LINK_PREFIX, PRIORITY_LABEL, TABS, type NotifyTab } from "@/lib/notify/rules";
 import { markAllRead, updateNotification } from "./actions";
+
+/** Separa o link da matéria (linha "🔗 Notícia completa (veículo): url") do texto. */
+function splitNewsLink(body: string): { text: string; link: { source: string; href: string } | null } {
+  const lines = body.split("\n");
+  const i = lines.findIndex((l) => l.startsWith(NEWS_LINK_PREFIX));
+  if (i < 0) return { text: body, link: null };
+  const m = lines[i].match(/\(([^)]*)\):\s*(https?:\/\/\S+)\s*$/);
+  lines.splice(i, 1);
+  return { text: lines.join("\n"), link: m ? { source: m[1], href: m[2] } : null };
+}
 
 const DELIVERY: Record<string, string> = {
   sent: "enviada ao celular", quiet: "guardada (horário de silêncio)", in_app: "só na central", failed: "falha no envio", test: "teste",
@@ -56,7 +66,15 @@ export default async function NotificacoesPage({ searchParams }: { searchParams:
                       </span>
                     </div>
                   </div>
-                  <div className="m-row-sub small" style={{ whiteSpace: "pre-line" }}>{n.body}</div>
+                  {(() => {
+                    const { text, link } = splitNewsLink(n.body);
+                    return (
+                      <>
+                        <div className="m-row-sub small" style={{ whiteSpace: "pre-line" }}>{text}</div>
+                        {link && <div className="m-row-sub small"><a href={link.href} target="_blank" rel="noopener noreferrer">Ler a notícia completa{link.source ? ` (${link.source})` : ""} ↗</a></div>}
+                      </>
+                    );
+                  })()}
                   {n.reason && <div className="m-row-sub xsmall faint">Por que este alerta: {n.reason}</div>}
                   <div className="row-wrap" style={{ marginTop: 6 }}>
                     <Link href={n.url} className="btn btn-primary btn-sm">Abrir análise</Link>

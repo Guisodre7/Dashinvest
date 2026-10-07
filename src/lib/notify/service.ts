@@ -10,7 +10,8 @@ import { parseTaxSettings, usStances } from "../analysis/stanceInput";
 import { LADDER_KEY, recordStanceHistory, TAX_KEY, type Ladders } from "../data/stances";
 import { getTheses, withThesis } from "../data/theses";
 import { brCandidates, ladderCandidates, thesisCandidates, macroCandidates, stanceCandidates, TEST_CANDIDATE, usCandidates } from "./candidates";
-import { decide, groupPushes, inQuietHours, parsePrefs, type Candidate, type Decision, type NotifyPrefs, type PushMessage } from "./rules";
+import { translateToPt } from "../translate";
+import { decide, groupPushes, newsText, inQuietHours, parsePrefs, type Candidate, type Decision, type NotifyPrefs, type PushMessage } from "./rules";
 
 export const PREFS_KEY = "notify_prefs";
 export const STATUS_KEY = "notify_status";
@@ -128,6 +129,11 @@ export async function runMonitor(repo: Repo, user: SessionUser, now = new Date()
   const history = await repo.notificationHistory(30);
   const firstRun = history.length === 0 && !(await repo.getSetting(STATUS_KEY).catch(() => null));
   const decisions = decide(candidates, prefs, history, now, firstRun);
+  // Notícias em inglês: traduz só as que vão virar notificação (poucas), antes de gravar e enviar.
+  await Promise.all(decisions.filter((d) => d.news).map(async (d) => {
+    const [title, summary] = await Promise.all([translateToPt(d.news!.title), translateToPt(d.news!.summary)]);
+    if (title) Object.assign(d, newsText(d.news!, { title, summary }));
+  }));
 
   // Avisos guardados durante o silêncio: tocam na primeira rodada depois dele.
   let released = 0;

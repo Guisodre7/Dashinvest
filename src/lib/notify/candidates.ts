@@ -3,11 +3,18 @@ import type { Stance } from "../analysis/stance";
 import type { Thesis } from "../thesis/logic";
 import type { MacroIndicator } from "../market/types";
 import { CLASS_LABEL, type PortfolioLedgerSummary } from "../portfolio/ledger";
-import type { Candidate } from "./rules";
+import { newsText, type Candidate, type NewsRef } from "./rules";
 
 const fmtPct = (v: number, d = 1) => `${v > 0 ? "+" : ""}${v.toFixed(d).replace(".", ",")}%`;
 /** "🟢 Possível compressão" → "possível compressão" (sem emoji repetido no texto). */
 const plain = (title: string) => title.replace(/^[^\p{L}]+/u, "").replace(/^\p{Lu}/u, (c) => c.toLowerCase());
+
+const NEWS_CATEGORY_PT: Record<string, string> = {
+  EARNINGS: "resultados", AI: "inteligência artificial", REGULATION: "regulação", MACRO: "macroeconomia",
+  "INTEREST RATES": "juros", "M&A": "fusões e aquisições", PRODUCT: "produto", MANAGEMENT: "gestão",
+  LEGAL: "questões jurídicas", COMPETITION: "concorrência", CAPEX: "investimentos (capex)",
+  "SUPPLY CHAIN": "cadeia de suprimentos", "REAL ESTATE": "imobiliário", CREDIT: "crédito", MARKET: "mercado",
+};
 
 /**
  * Converte as análises da carteira internacional em candidatos a notificação.
@@ -91,12 +98,15 @@ export function usCandidates(analyses: AssetAnalysis[], now = new Date()): Candi
       if (n.impact !== "CRITICAL" && n.impact !== "HIGH") continue;
       const ageH = (now.getTime() - new Date(n.published_at).getTime()) / 3_600_000;
       if (!(ageH >= 0 && ageH <= 48)) continue;
+      const news: NewsRef = {
+        ticker: t, title: n.title, summary: n.summary, url: n.url, source: n.source, publishedAt: n.published_at,
+        interpretation: `notícia de ${NEWS_CATEGORY_PT[n.category] ?? n.category.toLowerCase()} com impacto ${n.impact === "CRITICAL" ? "crítico" : "alto"} (${n.impact_reasons.slice(0, 2).join(", ")}).`,
+      };
       out.push({
         category: n.category === "EARNINGS" ? "earnings" : "news",
         priority: n.impact === "CRITICAL" ? "high" : "medium", market: "US", ticker: t, url,
         key: `${t}:news:${n.id.slice(-40)}`,
-        title: `${t}: ${n.title.slice(0, 90)}`,
-        body: `FATO: ${n.title} (${n.source}, ${new Date(n.published_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}). INTERPRETAÇÃO DO MODELO: notícia de ${n.category.toLowerCase()} com impacto ${n.impact === "CRITICAL" ? "crítico" : "alto"} (${n.impact_reasons.slice(0, 2).join(", ")}). Avaliar dentro da tese — manchete não é recomendação.`,
+        ...newsText(news), news,
         reason: `Notícia ${n.impact} · ${n.category}`,
       });
     }

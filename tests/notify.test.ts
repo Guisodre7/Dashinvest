@@ -111,7 +111,7 @@ describe("candidatos", () => {
     const news = (hoursAgo: number) => analysis({ news: [{ id: "n1", title: "Meta anuncia aquisição", source: "Reuters", published_at: new Date(day.getTime() - hoursAgo * 3_600_000).toISOString(), impact: "CRITICAL", category: "M&A", impact_reasons: ["aquisição"] }] as never });
     expect(usCandidates([news(72)], day)).toHaveLength(0);
     const c = usCandidates([news(3)], day)[0];
-    expect(c.body).toMatch(/^FATO: .*INTERPRETAÇÃO DO MODELO/);
+    expect(c.body).toMatch(/^FATO: .*INTERPRETAÇÃO DO MODELO/s);
     expect(c.url).toBe("/ativo/META");
   });
 

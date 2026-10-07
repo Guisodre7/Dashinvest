@@ -87,6 +87,8 @@ export interface Candidate {
   /** Por que o alerta existe (regra que disparou). */
   reason: string;
   url: string;
+  /** Notícia de origem (em inglês): traduzida antes de gravar/enviar, com link para a matéria. */
+  news?: NewsRef;
   /** Mesmo estado = mesma chave (sem data): a repetição é controlada pelo cooldown. */
   key: string;
 }
@@ -98,6 +100,38 @@ export interface SentRecord {
   ticker: string | null;
   delivery: Delivery;
   created_at: string;
+}
+
+export interface NewsRef {
+  ticker: string;
+  title: string;
+  summary: string | null;
+  url: string | null;
+  source: string;
+  publishedAt: string;
+  /** Leitura do modelo (categoria, impacto e motivos), já em português. */
+  interpretation: string;
+}
+
+/** Linha do link da matéria completa: aparece na central, sai do texto do push. */
+export const NEWS_LINK_PREFIX = "🔗 Notícia completa";
+
+/**
+ * Título e texto da notificação de notícia. Com tradução: título e resumo em português,
+ * marcados como tradução automática; sem tradução, o original. Sempre com o link da matéria.
+ */
+export function newsText(n: NewsRef, pt: { title: string | null; summary: string | null } = { title: null, summary: null }) {
+  const date = new Date(n.publishedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const title = pt.title ?? n.title;
+  const summary = pt.title ? pt.summary : n.summary;
+  const lines = [
+    `FATO: ${title} (${n.source}, ${date}).`,
+    ...(summary ? [`Resumo: ${summary.length > 400 ? `${summary.slice(0, 400).replace(/\s+\S*$/, "")}…` : summary}`] : []),
+    ...(pt.title ? ["(Tradução automática — o original está no link.)"] : []),
+    `INTERPRETAÇÃO DO MODELO: ${n.interpretation} Avaliar dentro da tese — manchete não é recomendação.`,
+    ...(n.url && /^https?:\/\//.test(n.url) ? [`${NEWS_LINK_PREFIX} (${n.source}): ${n.url}`] : []),
+  ];
+  return { title: `${n.ticker}: ${title.slice(0, 90)}`, body: lines.join("\n") };
 }
 
 export interface Decision extends Candidate {
@@ -175,7 +209,8 @@ export interface PushMessage { title: string; body: string; url: string; tag: st
  */
 export function groupPushes(decisions: Decision[], hideValues: boolean, runId: string): PushMessage[] {
   const idx = decisions.map((d, i) => [d, i] as const).filter(([d]) => d.delivery === "sent");
-  const text = (d: Decision) => (hideValues && d.publicBody ? d.publicBody : d.body);
+  // O link da matéria fica na central (texto do push não tem link clicável).
+  const text = (d: Decision) => (hideValues && d.publicBody ? d.publicBody : d.body).split("\n").filter((l) => !l.startsWith(NEWS_LINK_PREFIX)).join("\n");
   if (idx.length <= 2) {
     return idx.map(([d, i]) => ({ title: `${CATEGORY_META[d.category].emoji} ${d.title}`, body: text(d), url: d.url, tag: d.key, ids: [i] }));
   }
