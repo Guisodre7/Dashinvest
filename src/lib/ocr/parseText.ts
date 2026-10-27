@@ -87,7 +87,18 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
   // Lado da operação
   const buy = /\b(COMPRA|COMPRADO|BUY|BOUGHT|PURCHASE)\b/.test(upper);
   const sell = /\b(VENDA|VENDIDO|SELL|SOLD)\b/.test(upper);
-  const side: RawTrade["side"] = buy && !sell ? "buy" : sell && !buy ? "sell" : "unknown";
+  let side: RawTrade["side"] = buy && !sell ? "buy" : sell && !buy ? "sell" : "unknown";
+  // Rótulo explícito ("Lado: Compra", "Tipo de operação: Venda", "C/V: C") vale mais que palavras soltas:
+  // telas de corretora listam "Volume de compra" e "Volume de venda" juntas.
+  const labeled = upper.match(/\b(?:LADO|TIPO(?:\s+DE\s+OPERA[ÇC][ÃA]O)?|NATUREZA(?:\s+DA\s+OPERA[ÇC][ÃA]O)?|C\/V|SIDE)\s*[:-]?\s*\n?\s*(COMPRA|VENDA|BUY|SELL|C|V)\b/);
+  if (labeled) side = /^(COMPRA|BUY|C)$/.test(labeled[1]) ? "buy" : "sell";
+  else if (side === "unknown") {
+    // "Quantidade comprada 10" × "Quantidade vendida 0": o lado é o que tem quantidade.
+    const qb = findNumberAfter(clean, ["quantidade comprada"], 4), qs = findNumberAfter(clean, ["quantidade vendida"], 4);
+    if (qb && !qs) side = "buy"; else if (qs && !qb) side = "sell";
+  }
+  const sideWord = side === "sell" ? "vend(?:a|ida)" : side === "buy" ? "compr(?:a|ada)" : null;
+  const nonZero = (v: number | null) => (v ? v : null);
 
   // Ticker: prioriza os cadastrados na estratégia; depois "Symbol/Ativo: XXX".
   let ticker: string | null = null;
@@ -104,10 +115,16 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
     if (m) ticker = m[1];
   }
 
+  // B3 (texto em reais): ITUB4, BPAC11, ITUB4F (fracionário = mesmo papel).
+  if (!ticker && /R\$|\bBRL\b/.test(clean)) {
+    const m = upper.match(/\b([A-Z]{4}\d{1,2})F?\b/);
+    if (m) ticker = m[1];
+  }
+
   // Quantidade e preço — rótulos pt/en e o formato "10 BRK B @ 480.25".
   // "shares/cotas" vêm DEPOIS do número — tratados abaixo.
-  let quantity = findNumberAfter(clean, ["quantidade executada", "quantidade", "qtd\\.?", "qtde\\.?", "quantity", "qty\\.?", "n[ºo°]\\s*de\\s*(?:cotas|ações|acoes)"], 4);
-  let price = findNumberAfter(clean, ["preço médio", "preco medio", "preço de execução", "preço unitário", "preço", "preco", "avg\\.? price", "average price", "execution price", "fill price", "price"]);
+  let quantity = (sideWord ? nonZero(findNumberAfter(clean, [`quantidade ${sideWord}`], 4)) : null) ?? findNumberAfter(clean, ["quantidade executada", "quantidade", "qtd\\.?", "qtde\\.?", "quantity", "qty\\.?", "n[ºo°]\\s*de\\s*(?:cotas|ações|acoes)"], 4);
+  let price = (sideWord ? nonZero(findNumberAfter(clean, [`pre[çc]o (?:m[ée]dio )?de ${sideWord}`])) : null) ?? findNumberAfter(clean, ["preço médio", "preco medio", "preço de execução", "preço unitário", "preço", "preco", "avg\\.? price", "average price", "execution price", "fill price", "price"]);
   const at = upper.match(new RegExp(String.raw`(?:BOUGHT|SOLD|BUY|SELL|COMPRA|VENDA)?\s*${NUM}\s*(?:SHARES?\s*(?:OF\s*)?)?[A-Z]{1,5}(?:[\s./-][A-Z])?\s*@\s*${MONEY_PREFIX}${NUM}`));
   if (at) {
     quantity ??= parseAmount(at[1]);
@@ -134,7 +151,7 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
     if (m) quantity = parseAmount(m[1]);
   }
 
-  const gross = findNumberAfter(clean, ["valor bruto", "gross amount", "principal", "subtotal", "valor da operação", "valor(?!\\s*(?:total|l[ií]quido|bruto))"], 12);
+  const gross = (sideWord ? nonZero(findNumberAfter(clean, [`(?:volume|valor|financeiro) de ${sideWord}`])) : null) ?? findNumberAfter(clean, ["valor bruto", "gross amount", "principal", "subtotal", "valor da operação", "valor(?!\\s*(?:total|l[ií]quido|bruto))"], 12);
   const total = findNumberAfter(clean, ["valor total", "total debitado", "net amount", "valor líquido", "valor liquido", "total"]);
   // "Taxa de câmbio" não é taxa da operação.
   let fees = findNumberAfter(clean, ["tarifas e corretagem", "taxa de corretagem", "taxas?(?!\\s*d[eo]\\s*c[âa]mbio)", "corretagem", "emolumentos", "commission", "fees?"]);
@@ -142,7 +159,8 @@ export function parseTradeText(text: string, knownTickers: string[]): RawTrade {
 
   const fx = findNumberAfter(clean, ["taxa de câmbio", "taxa de cambio", "câmbio", "cambio", "cotação do dólar", "exchange rate", "vet"], 20);
 
-  const currency = /US\$|U\$|\bUSD\b|\$\s*\d/.test(clean) ? "USD" : /R\$|\bBRL\b/.test(clean) ? "BRL" : null;
+  // "R$ 41" também contém "$ 41": o dólar solto só conta sem o R antes.
+  const currency = /US\$|U\$|\bUSD\b|(?<!R)\$\s*\d/.test(clean) ? "USD" : /R\$|\bBRL\b/.test(clean) ? "BRL" : null;
   const trade_date = findDate(clean, portuguese, notes);
   const broker = BROKERS.find((b) => new RegExp(`\\b${b}\\b`, "i").test(clean)) ?? null;
 
