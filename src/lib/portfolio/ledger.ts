@@ -67,6 +67,13 @@ export type EntryInput = Pick<LedgerEntry, "market" | "asset_class" | "code" | "
   currency?: string; source?: LedgerEntry["source"]; notes?: string | null;
 };
 
+/**
+ * Aporte/resgate com data anterior ao último saldo não "volta" a data do saldo: o saldo já
+ * inclui o rendimento até a data dele. Voltar fazia a atualização pela cota da CVM reaplicar
+ * o rendimento desde a data antiga (saldo inflado).
+ */
+const laterDate = (a: string | null, b: string) => (a && a.slice(0, 10) > b ? a : b);
+
 export const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
@@ -127,7 +134,7 @@ export function applyEntry(current: Holding | null, e: EntryInput): { holding: H
       needAmount();
       h.cost_basis = r2(h.cost_basis + amount! + fees);
       h.current_value = r2((h.current_value ?? 0) + amount!);
-      h.current_value_at = e.trade_date;
+      h.current_value_at = laterDate(h.current_value_at, e.trade_date);
       break;
     }
     case "redemption": {
@@ -140,7 +147,7 @@ export function applyEntry(current: Holding | null, e: EntryInput): { holding: H
       realized = r2(amount! - fees - costOut);
       h.cost_basis = r2(Math.max(0, h.cost_basis - costOut));
       h.current_value = before !== null ? r2(Math.max(0, before - amount!)) : null;
-      h.current_value_at = e.trade_date;
+      h.current_value_at = laterDate(h.current_value_at, e.trade_date);
       break;
     }
     case "balance": {

@@ -101,3 +101,16 @@ describe("estratégia Brasil", () => {
     expect(parseBrStrategy({ classes: { renda_fixa: 40, acao: 30, fii: 30 }, assets: [] }).classes.renda_fixa).toBe(40);
   });
 });
+
+describe("renda fixa: aporte com data antiga", () => {
+  it("não volta a data do saldo (a cota da CVM não reaplica rendimento já contado)", () => {
+    const base = { market: "BR" as const, asset_class: "renda_fixa" as const, code: "btg-yield" };
+    let h = applyEntry(null, { ...base, kind: "contribution", trade_date: "2026-09-01", amount: 4000 }).holding;
+    h = applyEntry(h, { ...base, kind: "balance", trade_date: "2026-10-20", amount: 4100 }).holding;
+    h = applyEntry(h, { ...base, kind: "contribution", trade_date: "2026-10-05", amount: 500 }).holding;
+    expect(h.current_value).toBe(4600);
+    expect(h.current_value_at).toBe("2026-10-20");
+    h = applyEntry(h, { ...base, kind: "redemption", trade_date: "2026-10-27", amount: 1000 }).holding;
+    expect(h.current_value_at).toBe("2026-10-27");
+  });
+});

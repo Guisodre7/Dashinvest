@@ -3,6 +3,7 @@ import { FlagBR } from "@/components/Icons";
 import ActionForm from "@/components/ActionForm";
 import BrFundamentalsLine from "@/components/BrFundamentalsLine";
 import FundPrintImport from "@/components/FundPrintImport";
+import FundListImport from "@/components/FundListImport";
 import EntryReviewList from "@/components/EntryReviewList";
 import SourceLinks from "@/components/SourceLinks";
 import ValueRange from "@/components/ValueRange";
@@ -323,7 +324,10 @@ export default async function BrasilPage({ searchParams }: { searchParams: Promi
             { key: "provento", label: "Provento", content: <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={s.holdings.filter((h) => PRICED.has(h.asset_class)).map((h) => h.code)} mode="income" /> },
             { key: "rf", label: "Renda fixa", content: (
               <div className="stack">
-                <FundPrintImport />
+                <FundListImport funds={s.holdings.filter((h) => h.asset_class === "renda_fixa").map((h) => ({ code: h.code, name: h.name, value: h.value }))} />
+                <details><summary className="small muted">Print de um fundo só (com valor investido)</summary>
+                  <FundPrintImport />
+                </details>
                 <details><summary className="small muted">Registrar manualmente (aporte, resgate, saldo)</summary>
                   <LedgerForm action={registerEntry} fixedIncome={fixedIncome} suggestions={[]} mode="rf" />
                 </details>

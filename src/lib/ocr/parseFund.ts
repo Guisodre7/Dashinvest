@@ -100,3 +100,48 @@ export function parseFundPosition(text: string, today = new Date()): FundPositio
 
   return { name, cnpj, category, invested, grossBalance, netBalance, income, quotaPrice, asOf, lots, creditPrivate, verified: verified && !!name, warnings };
 }
+
+/** Um fundo da tela de LISTA de investimentos do banco (vários por print). */
+export interface FundListItem { name: string; grossBalance: number | null; netBalance: number | null }
+
+/**
+ * Lê a tela de lista ("Saldo bruto / Saldo líquido" de cada fundo, como no app do BTG).
+ * Cada fundo começa no nome, logo acima da categoria; só entra quem tem saldo.
+ */
+export function parseFundList(text: string): FundListItem[] {
+  const lines = text.replace(/\r/g, "").split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean);
+  const out: FundListItem[] = [];
+  let cur: FundListItem | null = null;
+  lines.forEach((l, i) => {
+    if (CATEGORIES.some((c) => l.toLowerCase() === c.toLowerCase()) && i > 0) {
+      const name = lines[i - 1];
+      const letters = (name.match(/\p{L}/gu) ?? []).length;
+      if (!/R\$/.test(name) && name.length >= 6 && letters / name.length >= 0.6) {
+        cur = { name, grossBalance: null, netBalance: null };
+        out.push(cur);
+      }
+      return;
+    }
+    if (!cur) return;
+    const g = l.match(new RegExp(`^(?:Saldo|Valor) bruto\\s*:?\\s*${MONEY}`, "i"));
+    const n = l.match(new RegExp(`^(?:Saldo|Valor) l[ií]quido\\s*:?\\s*${MONEY}`, "i"));
+    if (g) cur.grossBalance = parseAmount(g[1]);
+    if (n) cur.netBalance = parseAmount(n[1]);
+  });
+  return out.filter((f) => f.grossBalance !== null || f.netBalance !== null);
+}
+
+const words = (s: string) => new Set(s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1));
+
+/** Fundo cadastrado com o nome mais parecido (≥ 60% das palavras em comum), ou null. */
+export function matchFundByName<T extends { name: string | null; code: string }>(name: string, funds: T[]): T | null {
+  const a = words(name);
+  let best: T | null = null, score = 0;
+  for (const f of funds) {
+    const b = words(f.name ?? f.code.replace(/-/g, " "));
+    const common = [...a].filter((w) => b.has(w)).length;
+    const s = common / Math.max(a.size, b.size, 1);
+    if (s > score) { score = s; best = f; }
+  }
+  return score >= 0.6 ? best : null;
+}

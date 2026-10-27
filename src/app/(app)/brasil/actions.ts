@@ -231,3 +231,43 @@ export async function refreshFundsNow(_: FormState, _fd: FormData): Promise<Form
     return { ok: false, message: err instanceof Error ? err.message : "Erro ao atualizar." };
   }
 }
+
+const ListInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  use: z.enum(["net", "gross"]),
+  items: z.array(z.object({ code: z.string().min(1).max(60), gross: money.nullable(), net: money.nullable() })).min(1).max(30),
+});
+
+/**
+ * Print da LISTA de fundos do banco: atualiza o saldo de cada fundo cadastrado (não é aporte nem
+ * resgate). Vale como o valor exato daquele dia; a cota da CVM continua a partir dele.
+ */
+export async function updateFundBalancesFromList(raw: unknown): Promise<FormState> {
+  try {
+    const parsed = ListInput.safeParse(raw);
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados do print inválidos.");
+    const { date, use, items } = parsed.data;
+    if (date > new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)) throw new Error("Data no futuro.");
+    const user = await requireUser();
+    const repo = await getRepo(user.id);
+    const holdings = (await repo.getHoldings("BR")).filter((h) => h.asset_class === "renda_fixa");
+    const fmt = (v: number | null) => (v === null ? "—" : `R$ ${v.toFixed(2).replace(".", ",")}`);
+    const done_: string[] = [];
+    for (const it of items) {
+      const h = holdings.find((x) => x.code === it.code);
+      const value = use === "net" ? it.net ?? it.gross : it.gross ?? it.net;
+      if (!h || value === null) continue;
+      const { holding, entry } = applyEntry(h, {
+        market: "BR", asset_class: "renda_fixa", code: h.code, kind: "balance", trade_date: date, amount: value, source: "print",
+        notes: `Print da lista do banco · bruto ${fmt(it.gross)} · líquido ${fmt(it.net)} · usado: ${use === "net" ? "líquido" : "bruto"}`,
+      });
+      await repo.addLedgerEntry(entry);
+      await repo.saveHolding({ ...holding, id: h.id });
+      done_.push(h.name ?? h.code);
+    }
+    if (!done_.length) throw new Error("Nenhum fundo do print corresponde aos cadastrados.");
+    return done(user.id, `Saldo atualizado: ${done_.join(" · ")}.`);
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro ao salvar." };
+  }
+}
